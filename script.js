@@ -624,6 +624,7 @@ function onPointerDown(e) {
           state.draggedFamilyNodes = getConnectedFamilyByNode(m.partner1Id);
           const canvasCoords = screenToCanvas(e.clientX, e.clientY);
           state.dragOffset = { x: canvasCoords.x, y: canvasCoords.y };
+          state.marriageDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
           
           state.marriageClickTime = Date.now();
           state.marriageClickId = marriageId;
@@ -639,6 +640,7 @@ function onPointerDown(e) {
         state.draggedFamilyNodes = getConnectedFamilyByNode(m.partner1Id);
         const canvasCoords = screenToCanvas(e.clientX, e.clientY);
         state.dragOffset = { x: canvasCoords.x, y: canvasCoords.y };
+        state.marriageDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
         state.marriageClickId = null; // 선 드래그는 자녀 생성을 하지 않음
       }
     } else {
@@ -718,8 +720,14 @@ function onPointerMove(e) {
       const dx = canvasCoords.x - state.dragOffset.x;
       const dy = canvasCoords.y - state.dragOffset.y;
       
-      // 이동 거리가 5px 이상이면 드래그로 간주
-      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+      // 누적 이동 거리가 5px 이상이면 드래그로 간주
+      if (state.marriageDragStartCoords) {
+        const totalDx = canvasCoords.x - state.marriageDragStartCoords.x;
+        const totalDy = canvasCoords.y - state.marriageDragStartCoords.y;
+        if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
+          state.marriageDragStarted = true;
+        }
+      } else if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
         state.marriageDragStarted = true;
       }
       
@@ -813,6 +821,7 @@ function onPointerUp(e) {
   state.draggedNode = null;
   state.draggedFamilyNodes = null;
   state.marriageClickId = null;
+  state.marriageDragStartCoords = null;
   state.isPanning = false;
   render();
 }
