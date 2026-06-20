@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>고등학교 생명과학 - 가계도 작도 및 분석 시뮬레이션</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app-container">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <!-- Sidebar Header -->
+      <div class="sidebar-header">
+        <h1 class="sidebar-title">가계도 시뮬레이션</h1>
+        <div class="header-controls">
+          <!-- Theme Toggle Button -->
+          <button id="theme-toggle-btn" class="btn-icon" title="테마 변경">
+            <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+            </svg>
+            <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+              <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+            </svg>
+          </button>
+          <!-- Sidebar Collapse Button -->
+          <button id="sidebar-collapse-btn" class="btn-icon" title="메뉴 접기">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+              <path d="M9 3v18M14 9l-3 3 3 3"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Sidebar Body (Scrollable) -->
+      <div class="sidebar-content">
+        <!-- Actions Section (Moved clear button to below add-couple) -->
+        <!-- Genetic Property Settings -->
+        <div class="menu-section">
+          <div class="section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.5 16.5c-1.5 1.26-2.5 3.19-2.5 5.5h20c0-2.31-1-4.24-2.5-5.5"></path>
+              <path d="M12 2v10M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path>
+            </svg>
+            유전 설정
+          </div>
+          <div class="settings-group">
+            <div class="form-row">
+              <span class="form-label">형질 개수</span>
+              <select id="trait-count-select" class="form-select">
+                <option value="1">1개 형질 (A/a)</option>
+                <option value="2">2개 형질 (A/a, B/b)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <span class="form-label">형질 1 문자 (우/열)</span>
+              <div style="display: flex; gap: 4px;">
+                <input type="text" id="trait1-dom-input" class="form-input" value="A" maxlength="2" style="width: 36px; text-align: center;" title="우성 문자">
+                <input type="text" id="trait1-rec-input" class="form-input" value="a" maxlength="2" style="width: 36px; text-align: center;" title="열성 문자">
+              </div>
+            </div>
+            <div id="trait2-letter-row" class="form-row" style="display:none;">
+              <span class="form-label">형질 2 문자 (우/열)</span>
+              <div style="display: flex; gap: 4px;">
+                <input type="text" id="trait2-dom-input" class="form-input" value="B" maxlength="2" style="width: 36px; text-align: center;" title="우성 문자">
+                <input type="text" id="trait2-rec-input" class="form-input" value="b" maxlength="2" style="width: 36px; text-align: center;" title="열성 문자">
+              </div>
+            </div>
+            <div class="form-row">
+              <span class="form-label">염색체 종류</span>
+              <select id="chromosome-select" class="form-select">
+                <option value="autosomal">상염색체 유전</option>
+                <option value="sex_linked">성염색체 유전 (반성)</option>
+              </select>
+            </div>
+            <div id="notation-row" class="form-row" style="display:none;">
+              <span class="form-label">성염색체 표기</span>
+              <select id="notation-select" class="form-select">
+                <option value="prime">X / X'</option>
+                <option value="superscript">Xᴬ / Xᵃ (윗첨자)</option>
+              </select>
+            </div>
+            <div id="linkage-row" class="form-row" style="display:none;">
+              <span class="form-label">연관 관계</span>
+              <select id="linkage-select" class="form-select">
+                <option value="independent">독립 유전</option>
+                <option value="coupling">상인 연관 (AB / ab)</option>
+                <option value="repulsion">상반 연관 (Ab / aB)</option>
+              </select>
+            </div>
+            <div class="form-row">
+              <span class="form-label">유전자형 표시</span>
+              <label class="switch">
+                <input type="checkbox" id="show-genotype-toggle" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mode Section -->
+        <div class="menu-section">
+          <div class="section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="5" r="3"></circle>
+              <path d="m6.5 10.5 3.5 3.5-3.5 3.5M17.5 10.5l-3.5 3.5 3.5 3.5M10 17.5h4"></path>
+            </svg>
+            작동 모드 선택
+          </div>
+          <div class="mode-list">
+            <button id="mode-select" class="btn-mode active">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m4 4 7.07 17 2.51-7.38L21 11.07zM4 4l12 12"></path>
+              </svg>
+              <div>
+                <strong>선택 및 드래그</strong>
+                <div class="mode-desc">개체 선택, 위치 변경 및 형질 설정</div>
+              </div>
+            </button>
+            <button id="mode-marry" class="btn-mode">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
+              </svg>
+              <div>
+                <strong>부부 연결</strong>
+                <div class="mode-desc">남자(■)와 여자(●)를 차례로 터치해 연결</div>
+              </div>
+            </button>
+            <button id="mode-draw" class="btn-mode">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+                <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+                <path d="M2 2l7.586 7.586"></path>
+                <circle cx="11" cy="11" r="2"></circle>
+              </svg>
+              <div>
+                <strong>필기 모드</strong>
+                <div class="mode-desc">개체 고정, 캔버스에 설명 및 필기</div>
+              </div>
+            </button>
+          </div>
+          
+          <!-- Drawing Toolbar (hidden by default) -->
+          <div id="draw-toolbar" style="display:none; flex-direction:column; gap:12px; margin-top:16px; padding-top:16px; border-top:1px solid var(--border-color);">
+            <div class="form-row">
+              <span class="form-label">펜 색상 / 굵기</span>
+              <div style="display: flex; gap: 8px; align-items: center; flex-grow: 1;">
+                <input type="color" id="draw-color" value="#ef4444" style="width:30px; height:30px; border:none; padding:0; cursor:pointer; background:transparent;">
+                <input type="range" id="draw-width" min="1" max="15" value="3" style="flex-grow:1;">
+              </div>
+            </div>
+            <div class="form-row">
+              <span class="form-label">도구</span>
+              <div style="display:flex; gap:4px; flex-grow: 1;">
+                <button id="draw-pen-btn" class="btn-action active" style="flex:1; justify-content:center;">펜</button>
+                <button id="draw-eraser-btn" class="btn-action" style="flex:1; justify-content:center;">지우개</button>
+              </div>
+            </div>
+            <button id="draw-clear-btn" class="btn-action" style="justify-content:center; color:#ef4444; background-color:rgba(239, 68, 68, 0.1); border-color:rgba(239, 68, 68, 0.3);">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+              </svg>
+              필기 모두 지우기
+            </button>
+          </div>
+        </div>
+
+        <!-- Add Individuals Section -->
+        <div class="menu-section">
+          <div class="section-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12h14M12 5v14"></path>
+            </svg>
+            개체 생성 (드래그/터치 가능)
+          </div>
+          <div class="button-grid">
+            <button id="add-male-btn" class="btn-action">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+              </svg>
+              남자 추가 (■)
+            </button>
+            <button id="add-female-btn" class="btn-action">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+              </svg>
+              여자 추가 (●)
+            </button>
+            <button id="add-couple-btn" class="btn-action" style="grid-column: span 2;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              부부 추가 (■ - ●)
+            </button>
+            <button id="btn-clear-all" class="btn-action" style="grid-column: span 2; justify-content: center; background-color: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+              </svg>
+              화면 모두 지우기
+            </button>
+          </div>
+        </div>
+
+        <!-- Detail Inspector (Selected Node Info) -->
+        <div id="detail-panel">
+          <div class="detail-header">
+            <span class="detail-title">선택된 개체 설정</span>
+            <button id="detail-close-btn" class="btn-icon" style="width:24px; height:24px;" title="닫기">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 6 6 18M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="form-row">
+            <span class="form-label">라벨 / 이름</span>
+            <input type="text" id="node-name-input" class="form-input" placeholder="예: I-1, 철수">
+          </div>
+          <div class="form-row">
+            <span class="form-label">성별</span>
+            <select id="node-gender-select" class="form-select">
+              <option value="M">남성 (■)</option>
+              <option value="F">여성 (●)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <span id="trait1-label" class="form-label">형질 1 (색상)</span>
+            <select id="node-trait1-select" class="form-select">
+              <option value="normal">정상 (빈칸)</option>
+              <option value="affected">발현 (색칠)</option>
+            </select>
+          </div>
+          <div id="trait2-row" class="form-row" style="display:none;">
+            <span id="trait2-label" class="form-label">형질 2 (빗금)</span>
+            <select id="node-trait2-select" class="form-select">
+              <option value="normal">정상 (빈칸)</option>
+              <option value="affected">발현 (빗금)</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <span class="form-label">유전자형</span>
+            <div style="display: flex; flex-direction: column; gap: 4px; flex-grow: 1; max-width: 160px;">
+              <select id="node-genotype-select" class="form-select" style="max-width: 100%;">
+                <!-- Dynamically populated -->
+              </select>
+              <input type="text" id="node-genotype-custom" class="form-input" style="max-width: 100%; font-size: 0.8rem; padding: 4px 8px;" placeholder="직접 입력 가능">
+            </div>
+          </div>
+          <button id="delete-node-btn" class="btn-delete">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+            </svg>
+            개체/관계 삭제
+          </button>
+        </div>
+
+
+      </div>
+    </aside>
+
+    <!-- Canvas Container -->
+    <main id="canvas-container">
+      <!-- Touch Instruction Overlay (Mobile-friendly helper) -->
+      <div class="touch-instruction">드래그하여 이동 | 두 손가락으로 확대/축소 가능</div>
+
+      <!-- Floating Sidebar Toggle Button (Visible when sidebar collapsed) -->
+      <button id="sidebar-toggle-floating" class="btn-icon" title="메뉴 열기">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+          <path d="M9 3v18M11 15l3-3-3-3"></path>
+        </svg>
+      </button>
+
+      <!-- Legend Overlay (Top Right of Canvas) -->
+      <div id="legend-overlay">
+        <div class="legend-title" style="display: flex; justify-content: space-between; align-items: center; cursor: default;">
+          <span>범례</span>
+          <div style="display: flex; gap: 8px;">
+            <button id="legend-size-btn" class="btn-icon" style="width: 24px; height: 24px; border: none; background: transparent;" title="크기 변경 (1x, 2x, 3x)">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+              </svg>
+            </button>
+            <button id="legend-toggle-btn" class="btn-icon" style="width: 24px; height: 24px; border: none; background: transparent;" title="접기/펴기">
+              <svg id="legend-icon-collapse" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+              <svg id="legend-icon-expand" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="legend-items" id="legend-items-container">
+          <div class="legend-item legend-draggable" data-gender="M" data-trait1="normal" data-trait2="normal" title="클릭하여 추가하세요">
+            <div class="legend-symbol square"></div>
+            <span>정상 남성</span>
+          </div>
+          <div class="legend-item legend-draggable" data-gender="F" data-trait1="normal" data-trait2="normal" title="클릭하여 추가하세요">
+            <div class="legend-symbol circle"></div>
+            <span>정상 여성</span>
+          </div>
+          <div class="legend-item legend-draggable" data-gender="M" data-trait1="affected" data-trait2="normal" title="클릭하여 추가하세요">
+            <div class="legend-symbol square trait-1"></div>
+            <span>형질 1 발현 남성</span>
+          </div>
+          <div class="legend-item legend-draggable" data-gender="F" data-trait1="affected" data-trait2="normal" title="클릭하여 추가하세요">
+            <div class="legend-symbol circle trait-1"></div>
+            <span>형질 1 발현 여성</span>
+          </div>
+          <div class="legend-item legend-draggable trait-2-legend" data-gender="M" data-trait1="normal" data-trait2="affected" title="클릭하여 추가하세요">
+            <div class="legend-symbol square trait-2"></div>
+            <span>형질 2 발현 남성</span>
+          </div>
+          <div class="legend-item legend-draggable trait-2-legend" data-gender="F" data-trait1="normal" data-trait2="affected" title="클릭하여 추가하세요">
+            <div class="legend-symbol circle trait-2"></div>
+            <span>형질 2 발현 여성</span>
+          </div>
+          <div class="legend-item legend-draggable trait-both-legend" data-gender="M" data-trait1="affected" data-trait2="affected" title="클릭하여 추가하세요">
+            <div class="legend-symbol square trait-both"></div>
+            <span>형질 1+2 남성</span>
+          </div>
+          <div class="legend-item legend-draggable trait-both-legend" data-gender="F" data-trait1="affected" data-trait2="affected" title="클릭하여 추가하세요">
+            <div class="legend-symbol circle trait-both"></div>
+            <span>형질 1+2 여성</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- SVG Canvas -->
+      <svg id="pedigree-svg" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- Hatching Pattern for Trait 2 (Diagonals) -->
+          <pattern id="hatch-pattern" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="10" stroke="currentColor" stroke-width="2.5" />
+          </pattern>
+          <pattern id="hatch-pattern-light" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="10" stroke="#000000" stroke-width="2.5" />
+          </pattern>
+          <pattern id="hatch-pattern-dark" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <line x1="0" y1="0" x2="0" y2="10" stroke="#ffffff" stroke-width="2.5" />
+          </pattern>
+        </defs>
+        
+        <!-- SVG Interactive Background for Pan / Deselect -->
+        <rect class="svg-bg" width="10000" height="10000" x="-5000" y="-5000" />
+        
+        <!-- Pan/Zoom container -->
+        <g id="svg-viewport-group">
+          <!-- Lines (marriage, children connections) go behind -->
+          <g id="lines-group"></g>
+          <!-- Nodes (individuals) go in front -->
+          <g id="nodes-group"></g>
+          <!-- Drawing Layer (freehand strokes) goes on top -->
+          <g id="draw-layer"></g>
+        </g>
+      </svg>
+
+      <!-- Canvas zoom/pan controls floating overlay -->
+      <div class="canvas-overlays">
+        <button id="zoom-in-btn" class="btn-icon" style="background-color: var(--bg-tertiary);" title="확대">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" x2="16.65" y1="21" y2="16.65"></line>
+            <line x1="11" x2="11" y1="8" y2="14"></line>
+            <line x1="8" x2="14" y1="11" y2="11"></line>
+          </svg>
+        </button>
+        <button id="zoom-out-btn" class="btn-icon" style="background-color: var(--bg-tertiary);" title="축소">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" x2="16.65" y1="21" y2="16.65"></line>
+            <line x1="8" x2="14" y1="11" y2="11"></line>
+          </svg>
+        </button>
+        <button id="zoom-fit-btn" class="btn-icon" style="background-color: var(--bg-tertiary);" title="화면 맞춤">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 3h6v6M9 21H3v-6M21 9l-6-6M3 15l6 6M10 14l-7 7M14 10l7-7"></path>
+          </svg>
+        </button>
+      </div>
+
+
+
+      <!-- Delete dropzone when dragging nodes (optional trashbin area) -->
+      <div id="delete-drop-zone" class="delete-drop-zone" style="display:none;" title="여기 드래그하여 삭제">
+        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+        </svg>
+      </div>
+
+      <!-- Toast Alerts -->
+      <div id="toast" class="toast">경고 메세지</div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
