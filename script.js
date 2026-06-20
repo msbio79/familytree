@@ -26,6 +26,7 @@ const state = {
   
   // 유전학적 설정
   settings: {
+    inheritanceMode: 'standard', // 'standard' 또는 'abo'
     traitCount: 1,         // 형질 개수 (1 또는 2)
     chromosome: 'autosomal', // 염색체 종류 ('autosomal' 상, 'sex_linked' 성)
     notation: 'prime',      // 성염색체 표기법 ('prime' X/X', 'superscript' X^A/X^a)
@@ -75,6 +76,7 @@ const el = {
   iconMoon: document.querySelector('.icon-moon'),
   
   // 설정 컨트롤
+  inheritanceModeSelect: document.getElementById('inheritance-mode-select'),
   traitCountSelect: document.getElementById('trait-count-select'),
   chromosomeSelect: document.getElementById('chromosome-select'),
   notationRow: document.getElementById('notation-row'),
@@ -82,6 +84,7 @@ const el = {
   linkageRow: document.getElementById('linkage-row'),
   linkageSelect: document.getElementById('linkage-select'),
   showGenotypeToggle: document.getElementById('show-genotype-toggle'),
+  trait1LetterRow: document.getElementById('trait1-letter-row'),
   trait1DomInput: document.getElementById('trait1-dom-input'),
   trait1RecInput: document.getElementById('trait1-rec-input'),
   trait2LetterRow: document.getElementById('trait2-letter-row'),
@@ -103,6 +106,7 @@ const el = {
   drawPenBtn: document.getElementById('draw-pen-btn'),
   drawEraserBtn: document.getElementById('draw-eraser-btn'),
   drawClearBtn: document.getElementById('draw-clear-btn'),
+  drawExitBtn: document.getElementById('draw-exit-btn'),
   drawLayer: document.getElementById('draw-layer'),
   
   // 노드 추가 버튼
@@ -115,6 +119,9 @@ const el = {
   detailCloseBtn: document.getElementById('detail-close-btn'),
   nodeNameInput: document.getElementById('node-name-input'),
   nodeGenderSelect: document.getElementById('node-gender-select'),
+  bloodTypeRow: document.getElementById('blood-type-row'),
+  nodeBloodTypeSelect: document.getElementById('node-blood-type-select'),
+  trait1Row: document.getElementById('trait1-row'),
   nodeTrait1Select: document.getElementById('node-trait1-select'),
   trait2Row: document.getElementById('trait2-row'),
   nodeTrait2Select: document.getElementById('node-trait2-select'),
@@ -132,6 +139,7 @@ const el = {
   viewportGroup: document.getElementById('svg-viewport-group'),
   linesGroup: document.getElementById('lines-group'),
   nodesGroup: document.getElementById('nodes-group'),
+  htmlOverlayLayer: document.getElementById('html-overlay-layer'),
   deleteDropZone: document.getElementById('delete-drop-zone'),
   toast: document.getElementById('toast'),
   
@@ -180,28 +188,103 @@ function setupEventListeners() {
   
   // 설정 변경 시 UI 표시 여부를 결정하는 헬퍼 함수
   function updateSettingsVisibility() {
-    if (state.settings.chromosome === 'sex_linked') {
-      el.linkageRow.style.display = 'none'; // 성염색체는 단순 단일/복합 유전으로 단순화
-      if (state.settings.traitCount === 2) {
-        el.notationRow.style.display = 'none'; // 2형질 성염색체는 프라임(X') 표기 불가, 무조건 윗첨자 사용
+    // 1형질에서는 mixed(복합) 염색체 선택 불가
+    if (state.settings.traitCount === 1) {
+      if (state.settings.chromosome === 'mixed') {
+        el.chromosomeSelect.value = 'autosomal';
+        state.settings.chromosome = 'autosomal';
+      }
+      Array.from(el.chromosomeSelect.options).forEach(opt => {
+        opt.disabled = (opt.value === 'mixed');
+        opt.style.display = '';
+      });
+    } else {
+      Array.from(el.chromosomeSelect.options).forEach(opt => {
+        opt.disabled = false;
+        opt.style.display = '';
+      });
+    }
+
+    if (state.settings.inheritanceMode === 'abo') {
+      el.traitCountSelect.options[0].textContent = "1개 형질 (ABO식 혈액형)";
+      el.traitCountSelect.options[1].textContent = "2개 형질 (ABO식 혈액형, H/h)";
+      
+      if (state.settings.trait2Dom !== 'H' || state.settings.trait2Rec !== 'h') {
+        state.settings.trait2Dom = 'H';
+        state.settings.trait2Rec = 'h';
+        el.trait2DomInput.value = 'H';
+        el.trait2RecInput.value = 'h';
+      }
+      
+      el.trait1LetterRow.style.display = 'none';
+      el.linkageRow.style.display = 'none'; // ABO 연관유전은 지원 제외
+      if (state.settings.traitCount === 1) {
+        el.chromosomeSelect.disabled = true;
+        el.chromosomeSelect.value = 'autosomal';
+        state.settings.chromosome = 'autosomal';
+      } else {
+        el.chromosomeSelect.disabled = false;
+        // 2개 형질일 때 ABO는 1형질이 무조건 상염색체이므로 'sex_linked' 단독 선택 불가
+        if (state.settings.chromosome === 'sex_linked') {
+          el.chromosomeSelect.value = 'autosomal';
+          state.settings.chromosome = 'autosomal';
+        }
+        Array.from(el.chromosomeSelect.options).forEach(opt => {
+          if (opt.value === 'sex_linked') {
+            opt.disabled = true;
+            opt.style.display = 'none';
+          }
+        });
+      }
+      el.notationRow.style.display = 'none'; // ABO 2형질 성염색체/복합은 무조건 윗첨자 사용
+    } else {
+      el.traitCountSelect.options[0].textContent = "1개 형질 (A/a)";
+      el.traitCountSelect.options[1].textContent = "2개 형질 (A/a, B/b)";
+      
+      el.trait1LetterRow.style.display = 'flex';
+      el.chromosomeSelect.disabled = false;
+      if (state.settings.chromosome === 'sex_linked') {
+        el.linkageRow.style.display = 'none'; // 성염색체는 단순 단일/복합 유전으로 단순화
+        if (state.settings.traitCount === 2) {
+          el.notationRow.style.display = 'none'; // 2형질 성염색체는 무조건 윗첨자 사용
+          if (state.settings.notation === 'prime') {
+            el.notationSelect.value = 'superscript';
+            el.notationSelect.dispatchEvent(new Event('change'));
+          }
+        } else {
+          el.notationRow.style.display = 'flex';
+        }
+      } else if (state.settings.chromosome === 'mixed') {
+        if (state.settings.traitCount === 2) {
+          el.linkageRow.style.display = 'flex'; // 사용자의 요청에 따라 복합 유전에서도 연관 옵션 표시
+        } else {
+          el.linkageRow.style.display = 'none';
+        }
+        el.notationRow.style.display = 'none'; // 무조건 윗첨자 사용
         if (state.settings.notation === 'prime') {
           el.notationSelect.value = 'superscript';
           el.notationSelect.dispatchEvent(new Event('change'));
         }
       } else {
-        el.notationRow.style.display = 'flex';
-      }
-    } else {
-      el.notationRow.style.display = 'none';
-      if (state.settings.traitCount === 2) {
-        el.linkageRow.style.display = 'flex';
-      } else {
-        el.linkageRow.style.display = 'none';
+        // autosomal
+        el.notationRow.style.display = 'none';
+        if (state.settings.traitCount === 2) {
+          el.linkageRow.style.display = 'flex';
+        } else {
+          el.linkageRow.style.display = 'none';
+        }
       }
     }
   }
 
   // 전역 유전 설정 변경
+  el.inheritanceModeSelect.addEventListener('change', (e) => {
+    state.settings.inheritanceMode = e.target.value;
+    updateLegendVisibility();
+    updateSettingsVisibility();
+    updateDetailPanelGenotypes();
+    render();
+  });
   el.traitCountSelect.addEventListener('change', (e) => {
     state.settings.traitCount = parseInt(e.target.value);
     toggleTrait2UI();
@@ -225,7 +308,7 @@ function setupEventListeners() {
     if (oldNotation !== newNotation && state.settings.chromosome === 'sex_linked' && state.settings.traitCount === 1) {
       const L1_D = state.settings.trait1Dom || 'A';
       const L1_R = state.settings.trait1Rec || 'a';
-      const superscriptMap = {'A':'ᴬ', 'B':'ᴮ', 'C':'ᶜ', 'D':'ᴰ', 'E':'ᴱ', 'F':'ᶠ', 'G':'ᴳ', 'H':'ᴴ', 'I':'ᴵ', 'J':'ᴶ', 'K':'ᴷ', 'L':'ᴸ', 'M':'ᴹ', 'N':'ᴺ', 'O':'ᴼ', 'P':'ᴾ', 'Q':'Q', 'R':'ᴿ', 'S':'ˢ', 'T':'ᵀ', 'U':'ᵁ', 'V':'ⱽ', 'W':'ᵂ', 'X':'ˣ', 'Y':'ʸ', 'Z':'ᶻ', 'a':'ᵃ', 'b':'ᵇ', 'c':'ᶜ', 'd':'ᵈ', 'e':'ᵉ', 'f':'ᶠ', 'g':'ᵍ', 'h':'ʰ', 'i':'ⁱ', 'j':'ʲ', 'k':'ᵏ', 'l':'ˡ', 'm':'ᵐ', 'n':'ⁿ', 'o':'ᵒ', 'p':'ᵖ', 'q':'q', 'r':'ʳ', 's':'ˢ', 't':'ᵗ', 'u':'ᵘ', 'v':'ᵛ', 'w':'ʷ', 'x':'ˣ', 'y':'ʸ', 'z':'ᶻ', '*':'*'};
+      const superscriptMap = {'A':'ᴬ', 'B':'ᴮ', 'C':'ᶜ', 'D':'ᴰ', 'E':'ᴱ', 'F':'ᶠ', 'G':'ᴳ', 'H':'ᴴ', 'I':'ᴵ', 'J':'ᶠ', 'K':'ᴷ', 'L':'ᴸ', 'M':'ᴹ', 'N':'ᴺ', 'O':'ᴼ', 'P':'ᴾ', 'Q':'Q', 'R':'ᴿ', 'S':'ˢ', 'T':'ᵀ', 'U':'ᵁ', 'V':'ⱽ', 'W':'ᵂ', 'X':'ˣ', 'Y':'ʸ', 'Z':'ᶻ', 'a':'ᵃ', 'b':'ᵇ', 'c':'ᶜ', 'd':'ᵈ', 'e':'ᵉ', 'f':'ᶠ', 'g':'ᵍ', 'h':'ʰ', 'i':'ⁱ', 'j':'ʲ', 'k':'ᵏ', 'l':'ˡ', 'm':'ᵐ', 'n':'ⁿ', 'o':'ᵒ', 'p':'ᵖ', 'q':'q', 'r':'ʳ', 's':'ˢ', 't':'ᵗ', 'u':'ᵘ', 'v':'ᵛ', 'w':'ʷ', 'x':'ˣ', 'y':'ʸ', 'z':'ᶻ', '*':'*'};
       
       const getSup = (str) => {
         return str.split('').map(c => superscriptMap[c] || '^' + c).join('');
@@ -368,6 +451,13 @@ function setupEventListeners() {
     el.drawLayer.innerHTML = '';
   });
   
+  el.drawExitBtn.addEventListener('click', () => {
+    setMode('select');
+    if (el.sidebar.classList.contains('collapsed')) {
+      toggleSidebar(false); // 사이드바 다시 펼치기
+    }
+  });
+  
   // 개체 직접 추가 버튼
   el.addMaleBtn.addEventListener('click', () => addIndividual('M'));
   el.addFemaleBtn.addEventListener('click', () => addIndividual('F'));
@@ -392,6 +482,16 @@ function setupEventListeners() {
       if (node) {
         node.gender = e.target.value;
         updateDetailPanelGenotypes();
+        render();
+      }
+    }
+  });
+  
+  el.nodeBloodTypeSelect.addEventListener('change', (e) => {
+    if (state.selectedNodeId) {
+      const node = findNode(state.selectedNodeId);
+      if (node) {
+        node.bloodType = e.target.value;
         render();
       }
     }
@@ -516,6 +616,13 @@ function setMode(newMode) {
   
   el.drawToolbar.style.display = newMode === 'draw' ? 'flex' : 'none';
   
+  if (newMode === 'draw') {
+    // 필기 모드 진입 시 사이드바를 자동으로 접음
+    if (!el.sidebar.classList.contains('collapsed')) {
+      toggleSidebar(true);
+    }
+  }
+  
   state.marryFirstNodeId = null;
   state.draggedNode = null;
   state.isPanning = false;
@@ -552,10 +659,15 @@ function eraseAtPointer(x, y) {
 }
 
 function onPointerDown(e) {
+  const target = e.target;
+  // 유전자형 select 클릭 시 드래그 및 이벤트 막기
+  if (target.tagName.toLowerCase() === 'select' || target.tagName.toLowerCase() === 'option' || target.closest('foreignObject')) {
+    return;
+  }
+  
   // 멀티터치를 위해 포인터 등록
   state.pointerCache.push(e);
   
-  const target = e.target;
   // closest를 사용하여 텍스트나 빗금 오버레이 클릭 시에도 정상 그룹 데이터 매칭되도록 보완
   const nodeGroup = target.closest('.pedigree-node');
   const nodeId = nodeGroup ? nodeGroup.getAttribute('data-node-id') : null;
@@ -863,6 +975,7 @@ function screenToCanvas(screenX, screenY) {
 // 캔버스 카메라 변환 적용
 function applyTransform() {
   el.viewportGroup.setAttribute('transform', `translate(${state.panX}, ${state.panY}) scale(${state.scale})`);
+  el.htmlOverlayLayer.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.scale})`;
 }
 
 // 특정 비율로 캔버스 줌
@@ -1051,11 +1164,12 @@ function addIndividual(gender, trait1 = 'normal', trait2 = 'normal') {
     x: targetX,
     y: targetY,
     gender: gender,
-    name: '',
+    bloodType: 'unknown',
     trait1: trait1,
     trait2: trait2,
-    parentMarriageId: null,
-    genotype: ''
+    name: '',
+    genotype: '',
+    parentMarriageId: null
   };
   
   state.nodes.push(newNode);
@@ -1143,6 +1257,7 @@ function addChildToMarriage(marriageId) {
     y: midY + 160, // 한 세대 아래로
     gender: Math.random() > 0.5 ? 'M' : 'F', // 무작위 성별
     name: '',
+    bloodType: 'unknown',
     trait1: 'normal',
     trait2: 'normal',
     parentMarriageId: marriageId,
@@ -1227,8 +1342,17 @@ function showDetailPanel(node) {
   el.detailPanel.classList.add('visible');
   el.nodeNameInput.value = node.name;
   el.nodeGenderSelect.value = node.gender;
+  el.nodeBloodTypeSelect.value = node.bloodType;
   el.nodeTrait1Select.value = node.trait1;
   el.nodeTrait2Select.value = node.trait2;
+  
+  if (state.settings.inheritanceMode === 'abo') {
+    el.bloodTypeRow.style.display = 'flex';
+    el.trait1Row.style.display = 'none';
+  } else {
+    el.bloodTypeRow.style.display = 'none';
+    el.trait1Row.style.display = 'flex';
+  }
   
   // 유전자 설정에 맞게 선택형 리스트 갱신
   updateDetailPanelGenotypes();
@@ -1243,6 +1367,7 @@ function showMarriageDetail(marriage) {
   el.detailPanel.classList.add('visible');
   el.nodeNameInput.value = '부부 결합선';
   el.nodeGenderSelect.value = ''; // 성별 해당 없음
+  el.nodeBloodTypeSelect.value = '';
   el.nodeTrait1Select.value = '';
   el.nodeTrait2Select.value = '';
   el.nodeGenotypeSelect.innerHTML = '';
@@ -1285,7 +1410,48 @@ function updateDetailPanelGenotypes() {
   const S2_D = getSup(L2_D);
   const S2_R = getSup(L2_R);
 
-  if (chr === 'autosomal') {
+  if (state.settings.inheritanceMode === 'abo') {
+    let aboOptions = [
+      'AA', 'AO', 'A_', 'A?',
+      'BB', 'BO', 'B_', 'B?',
+      'AB', 'OO'
+    ];
+    
+    if (traitCnt === 1) {
+      options = aboOptions;
+    } else {
+      let t2Options = [];
+      if (chr === 'autosomal') {
+        t2Options = [`${L2_D}${L2_D}`, `${L2_D}${L2_R}`, `${L2_R}${L2_R}`, `${L2_D}_`, `${L2_R}_`, `${L2_D}?`];
+      } else { // sex_linked
+        if (gender === 'M') {
+          t2Options = [`X${S2_D}Y`, `X${S2_R}Y`];
+        } else {
+          t2Options = [`X${S2_D}X${S2_D}`, `X${S2_D}X${S2_R}`, `X${S2_R}X${S2_R}`];
+        }
+      }
+      // 조합
+      for (let abo of aboOptions) {
+        for (let t2 of t2Options) {
+          options.push(`${abo} ${t2}`);
+        }
+      }
+    }
+  } else if (chr === 'mixed') {
+    // 복합 유전: 1형질(상염색체) + 2형질(성염색체)
+    const t1Options = [`${L1_D}${L1_D}`, `${L1_D}${L1_R}`, `${L1_R}${L1_R}`, `${L1_D}_`, `${L1_R}_`, `${L1_D}?`];
+    let t2Options = [];
+    if (gender === 'M') {
+      t2Options = [`X${S2_D}Y`, `X${S2_R}Y`];
+    } else {
+      t2Options = [`X${S2_D}X${S2_D}`, `X${S2_D}X${S2_R}`, `X${S2_R}X${S2_R}`];
+    }
+    for (let t1 of t1Options) {
+      for (let t2 of t2Options) {
+        options.push(`${t1} ${t2}`);
+      }
+    }
+  } else if (chr === 'autosomal') {
     // 상염색체
     if (traitCnt === 1) {
       options = [`${L1_D}${L1_D}`, `${L1_D}${L1_R}`, `${L1_R}${L1_R}`, `${L1_D}_`, `${L1_R}_`, `${L1_D}?`];
@@ -1354,6 +1520,7 @@ function render() {
   // 1. 초기 캔버스 비우기
   el.linesGroup.innerHTML = '';
   el.nodesGroup.innerHTML = '';
+  if (el.htmlOverlayLayer) el.htmlOverlayLayer.innerHTML = '';
   
   // 2. 자녀 선 그리기 (완벽한 직교 연결선) - 부부 노드 밑에 깔리도록 먼저 그리기
   state.marriages.forEach(m => {
@@ -1490,8 +1657,8 @@ function render() {
     applyTraitFill(shape, n);
     group.appendChild(shape);
     
-    // 복합 형질(2형질)에서 빗금 오버레이 필요시 (플레이스홀더 빈칸인 경우 빗금 생략)
-    if (!n.isPlaceholder && n.trait2 === 'affected') {
+    // 복합 형질(2형질)에서 빗금 오버레이 필요시 (플레이스홀더 빈칸인 경우 빗금 생략, ABO 모드에서는 빗금 생략)
+    if (!n.isPlaceholder && n.trait2 === 'affected' && state.settings.inheritanceMode !== 'abo') {
       let hatchOverlay;
       if (n.gender === 'M') {
         hatchOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -1509,6 +1676,27 @@ function render() {
       hatchOverlay.setAttribute('fill', `url(#hatch-pattern-${state.theme})`);
       hatchOverlay.setAttribute('pointer-events', 'none'); // 오버레이 터치 차단
       group.appendChild(hatchOverlay);
+    }
+    
+    // ABO 혈액형 텍스트 중앙에 표시
+    if (state.settings.inheritanceMode === 'abo' && n.bloodType && n.bloodType !== 'unknown' && !n.isPlaceholder) {
+      const bloodText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      bloodText.setAttribute('x', '0');
+      bloodText.setAttribute('y', '6'); // 텍스트 중앙 위치 보정
+      bloodText.setAttribute('text-anchor', 'middle');
+      bloodText.setAttribute('font-size', '18px');
+      bloodText.setAttribute('font-weight', 'bold');
+      
+      // 배경색(trait2 발현 시)이 진할 경우 글씨를 밝게, 아닐 경우 테마에 맞춤
+      const isFilled = (n.trait2 === 'affected' && state.settings.traitCount === 2);
+      if (isFilled) {
+        bloodText.setAttribute('fill', '#ffffff'); // 색칠된 배경에선 항상 흰글씨
+      } else {
+        bloodText.setAttribute('fill', state.theme === 'dark' ? '#f8fafc' : '#0f172a');
+      }
+      
+      bloodText.textContent = n.bloodType;
+      group.appendChild(bloodText);
     }
     
     // 라벨/이름 텍스트 추가 (빈칸 플레이스홀더는 "?" 출력)
@@ -1530,19 +1718,16 @@ function render() {
     // 유전자형 텍스트 추가 (보이기 활성화 시, 플레이스홀더 제외)
     if (state.settings.showGenotype && !n.isPlaceholder) {
       if (isSelected && state.mode === 'select') {
-        const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-        fo.setAttribute('x', '-60');
-        fo.setAttribute('y', '-65'); // 유전자형 텍스트와 비슷한 높이
-        fo.setAttribute('width', '120');
-        fo.setAttribute('height', '36');
-        
         const select = document.createElement('select');
-        select.style.width = '100%';
-        select.style.height = '100%';
+        select.style.position = 'absolute';
+        select.style.left = `${n.x - 60}px`;
+        select.style.top = `${n.y - 65}px`;
+        select.style.width = '120px';
+        select.style.height = '36px';
         select.style.fontSize = '18px';
         select.style.fontFamily = "'Outfit', sans-serif";
         select.style.fontWeight = 'bold';
-        const genotypeColor = state.theme === 'dark' ? '#f97316' : '#111827';
+        const genotypeColor = state.theme === 'dark' ? '#eab308' : '#111827';
         select.style.color = genotypeColor;
         select.style.textAlign = 'center';
         select.style.cursor = 'pointer';
@@ -1550,16 +1735,28 @@ function render() {
         select.style.borderRadius = '6px';
         select.style.backgroundColor = state.theme === 'dark' ? '#1e293b' : '#ffffff';
         select.style.outline = 'none';
+        select.style.pointerEvents = 'auto'; // 상위 레이어의 pointer-events: none 무시
         
-        // 클릭 시 개체 이동이나 다른 이벤트로 버블링되지 않도록 차단
-        ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend', 'dblclick'].forEach(evt => {
-          select.addEventListener(evt, e => e.stopPropagation());
+        // iOS Safari Ghost Click 방지: 드롭다운이 열려있을 때 SVG 터치 차단
+        select.addEventListener('focus', () => {
+          el.svg.style.pointerEvents = 'none';
+        });
+        
+        select.addEventListener('blur', () => {
+          el.svg.style.pointerEvents = 'auto';
+          state.draggedNode = null;
+          state.pointerCache = [];
         });
         
         select.addEventListener('change', e => {
           n.genotype = e.target.value;
           el.nodeGenotypeCustom.value = n.genotype;
           el.nodeGenotypeSelect.value = n.genotype;
+          
+          el.svg.style.pointerEvents = 'auto';
+          state.draggedNode = null;
+          state.pointerCache = [];
+          
           render();
         });
         
@@ -1572,8 +1769,9 @@ function render() {
           select.appendChild(option);
         });
         
-        fo.appendChild(select);
-        group.appendChild(fo);
+        if (el.htmlOverlayLayer) {
+          el.htmlOverlayLayer.appendChild(select);
+        }
       } else {
         let displayGenotype = n.genotype;
         if (displayGenotype) {
@@ -1598,7 +1796,49 @@ function render() {
           geno.setAttribute('x', '0');
           geno.setAttribute('y', '-38'); // 상자 내부 중앙 (텍스트 베이스라인)
           geno.setAttribute('class', 'pedigree-node-genotype');
-          geno.textContent = displayGenotype;
+          
+          if (state.settings.inheritanceMode === 'abo') {
+            const parts = displayGenotype.split(' ');
+            const aboPart = parts[0];
+            const otherPart = parts.slice(1).join(' ');
+            
+            const tspanAbo = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+            tspanAbo.setAttribute('fill', '#ef4444'); // 빨간색
+            tspanAbo.textContent = aboPart;
+            geno.appendChild(tspanAbo);
+            
+            if (otherPart) {
+              const tspanOther = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+              const t2Color = (state.settings.chromosome === 'autosomal') 
+                  ? (state.theme === 'dark' ? '#eab308' : '#111827') 
+                  : (state.theme === 'dark' ? '#ffffff' : '#3b82f6');
+              tspanOther.setAttribute('fill', t2Color);
+              tspanOther.textContent = ' ' + otherPart;
+              geno.appendChild(tspanOther);
+            }
+          } else if (state.settings.chromosome === 'mixed') {
+            const parts = displayGenotype.split(' ');
+            const t1Part = parts[0];
+            const t2Part = parts.slice(1).join(' ');
+            
+            const tspanT1 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+            tspanT1.setAttribute('fill', state.theme === 'dark' ? '#eab308' : '#111827');
+            tspanT1.textContent = t1Part;
+            geno.appendChild(tspanT1);
+            
+            if (t2Part) {
+              const tspanT2 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+              tspanT2.setAttribute('fill', state.theme === 'dark' ? '#ffffff' : '#3b82f6');
+              tspanT2.textContent = ' ' + t2Part;
+              geno.appendChild(tspanT2);
+            }
+          } else {
+            const singleColor = (state.settings.chromosome === 'autosomal')
+                  ? (state.theme === 'dark' ? '#eab308' : '#111827')
+                  : (state.theme === 'dark' ? '#ffffff' : '#3b82f6');
+            geno.setAttribute('fill', singleColor);
+            geno.textContent = displayGenotype;
+          }
           
           // 상자를 먼저 추가해서 텍스트보다 뒤에 오도록 함
           group.appendChild(bgRect);
@@ -1619,6 +1859,19 @@ function render() {
 
 // 형질 여부에 따라 노드 바탕 색 채우기
 function applyTraitFill(shape, node) {
+  if (state.settings.inheritanceMode === 'abo') {
+    // ABO 모드: 두 번째 형질(trait2)이 1형질처럼 색칠(fill)을 담당
+    const trait2 = node.trait2 === 'affected';
+    if (trait2 && state.settings.traitCount === 2) {
+      shape.setAttribute('fill', 'var(--trait-1-color)'); 
+    } else {
+      shape.setAttribute('fill', 'var(--node-bg)');
+    }
+    shape.setAttribute('stroke', 'var(--node-stroke)');
+    shape.setAttribute('stroke-width', '3.5');
+    return;
+  }
+
   const trait1 = node.trait1 === 'affected';
   const trait2 = node.trait2 === 'affected';
   
@@ -1665,36 +1918,49 @@ function onLegendClick(e) {
   if (state.selectedNodeId) {
     // 선택된 개체가 있으면 해당 개체의 속성을 변경
     const node = findNode(state.selectedNodeId);
-    if (node && !node.isPlaceholder) {
-      // 성별이 변경되는 경우 부부 관계에서 동성 혼인이 되는지 체크
-      if (node.gender !== gender) {
-        const isSpouseSameGender = state.marriages.some(m => {
-          if (m.partner1Id === node.id) {
-            const spouse = findNode(m.partner2Id);
-            return spouse && spouse.gender === gender;
-          }
-          if (m.partner2Id === node.id) {
-            const spouse = findNode(m.partner1Id);
-            return spouse && spouse.gender === gender;
-          }
-          return false;
-        });
+    if (node) {
+      if (node.isPlaceholder) {
+        // 플레이스홀더인 경우 선택한 범례 항목으로 교체
+        node.isPlaceholder = false;
+        node.gender = gender;
+        node.trait1 = trait1;
+        node.trait2 = trait2;
         
-        if (isSpouseSameGender) {
-          showToast("부부 관계에 있는 개체는 동성으로 변경할 수 없습니다.");
-          return;
+        showDetailPanel(node); 
+        render();
+        showToast("빈칸이 선택한 개체로 채워졌습니다.");
+        return;
+      } else {
+        // 일반 노드인 경우 성별 변경 시 부부 관계 동성 혼인 체크
+        if (node.gender !== gender) {
+          const isSpouseSameGender = state.marriages.some(m => {
+            if (m.partner1Id === node.id) {
+              const spouse = findNode(m.partner2Id);
+              return spouse && spouse.gender === gender;
+            }
+            if (m.partner2Id === node.id) {
+              const spouse = findNode(m.partner1Id);
+              return spouse && spouse.gender === gender;
+            }
+            return false;
+          });
+          
+          if (isSpouseSameGender) {
+            showToast("부부 관계에 있는 개체는 동성으로 변경할 수 없습니다.");
+            return;
+          }
         }
+        
+        node.gender = gender;
+        node.trait1 = trait1;
+        node.trait2 = trait2;
+        
+        // 유전자형 갱신 등 상세 패널 내용 업데이트
+        showDetailPanel(node); 
+        render();
+        showToast("선택된 개체의 형질과 성별이 변경되었습니다.");
+        return;
       }
-      
-      node.gender = gender;
-      node.trait1 = trait1;
-      node.trait2 = trait2;
-      
-      // 유전자형 갱신 등 상세 패널 내용 업데이트
-      showDetailPanel(node); 
-      render();
-      showToast("선택된 개체의 형질과 성별이 변경되었습니다.");
-      return;
     }
   }
   

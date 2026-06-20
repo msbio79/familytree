@@ -25,7 +25,7 @@
   --node-stroke: #ffffff;
   --node-selected-stroke: #f59e0b;
   --node-text: #ffffff;
-  --genotype-color: #f97316; /* 시인성이 좋은 주황색 */
+  --genotype-color: #eab308; /* 시인성이 좋은 노란색 */
   
   --sidebar-width: 380px;
   --header-height: 60px;
@@ -763,6 +763,101 @@ input:checked + .slider:before {
   letter-spacing: 0.02em;
   font-weight: 500;
   backdrop-filter: blur(4px);
+}
+
+/* Floating Drawing Toolbar */
+.floating-toolbar {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  /* cursor: grab for the handle, but not the whole box */
+}
+
+.toolbar-drag-handle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 20px;
+  cursor: grab;
+  color: var(--text-secondary);
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.toolbar-drag-handle:hover {
+  opacity: 1;
+}
+
+.toolbar-drag-handle:active {
+  cursor: grabbing;
+}
+
+.toolbar-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 24px;
+  background-color: var(--border-color);
+}
+
+.btn-tool {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-tool:hover {
+  background-color: var(--accent-light);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.btn-tool.active {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #fff;
+}
+
+.btn-tool.btn-danger {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.05);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.btn-tool.btn-danger:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+  border-color: #ef4444;
 }
 
 /* Responsive adjustments */
