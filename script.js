@@ -692,7 +692,16 @@ function onPointerMove(e) {
       const canvasCoords = screenToCanvas(e.clientX, e.clientY);
       state.draggedNode.x = canvasCoords.x - state.dragOffset.x;
       state.draggedNode.y = canvasCoords.y - state.dragOffset.y;
-      state.draggedNode.manualMoved = true; // 사용자가 직접 움직였음을 표시
+      
+      if (state.nodeDragStartCoords) {
+        const totalDx = canvasCoords.x - state.nodeDragStartCoords.x;
+        const totalDy = canvasCoords.y - state.nodeDragStartCoords.y;
+        if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
+          state.draggedNode.manualMoved = true; // 사용자가 실제로 5px 이상 드래그했음을 표시
+        }
+      } else {
+        state.draggedNode.manualMoved = true;
+      }
       
       // 화면 밖 이탈 방지
       state.draggedNode.x = Math.max(-2000, Math.min(2000, state.draggedNode.x));
@@ -734,7 +743,10 @@ function onPointerMove(e) {
       state.draggedFamilyNodes.forEach(n => {
         n.x += dx;
         n.y += dy;
-        n.manualMoved = true;
+        // 실제 드래그로 판별되었을 때만 수동 이동으로 처리 (터치 시 미세한 떨림 무시)
+        if (state.marriageDragStarted) {
+          n.manualMoved = true;
+        }
       });
       
       state.dragOffset.x = canvasCoords.x;
@@ -822,6 +834,7 @@ function onPointerUp(e) {
   state.draggedFamilyNodes = null;
   state.marriageClickId = null;
   state.marriageDragStartCoords = null;
+  state.nodeDragStartCoords = null;
   state.isPanning = false;
   render();
 }
@@ -925,6 +938,7 @@ function handleNodeClick(nodeId, e) {
     const canvasCoords = screenToCanvas(e.clientX, e.clientY);
     state.dragOffset.x = canvasCoords.x - node.x;
     state.dragOffset.y = canvasCoords.y - node.y;
+    state.nodeDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
     
     showDetailPanel(node);
     render();
@@ -1563,11 +1577,31 @@ function render() {
       } else {
         let displayGenotype = n.genotype;
         if (displayGenotype) {
+          // 유전자형 텍스트 길이에 맞춰 상자 너비 대략적 계산
+          const charLen = displayGenotype.length;
+          const bgWidth = Math.max(48, charLen * 14 + 20);
+          const bgHeight = 34;
+          
+          // 배경 상자 생성
+          const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          bgRect.setAttribute('x', -bgWidth / 2);
+          bgRect.setAttribute('y', '-62');
+          bgRect.setAttribute('width', bgWidth);
+          bgRect.setAttribute('height', bgHeight);
+          bgRect.setAttribute('rx', '6'); // 둥근 모서리
+          // 테마에 맞는 불투명 배경색과 테두리 적용 (가계도 선 가리기용)
+          bgRect.setAttribute('fill', 'var(--bg-primary)');
+          bgRect.setAttribute('stroke', 'var(--border-color)');
+          bgRect.setAttribute('stroke-width', '2');
+          
           const geno = document.createElementNS('http://www.w3.org/2000/svg', 'text');
           geno.setAttribute('x', '0');
-          geno.setAttribute('y', '-34'); // 글씨 크기 증가로 인해 더 위로 올림
+          geno.setAttribute('y', '-38'); // 상자 내부 중앙 (텍스트 베이스라인)
           geno.setAttribute('class', 'pedigree-node-genotype');
           geno.textContent = displayGenotype;
+          
+          // 상자를 먼저 추가해서 텍스트보다 뒤에 오도록 함
+          group.appendChild(bgRect);
           group.appendChild(geno);
         }
       }
