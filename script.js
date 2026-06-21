@@ -62,6 +62,7 @@ const state = {
   // 상태 백업/되돌리기용 (향후 기능)
   pointerCache: [],
   prevDiff: -1,
+  prevPinchCenter: null,
   
   // 빈칸 플레이스홀더 제어
   activePlaceholderTargetId: null
@@ -924,16 +925,27 @@ function onPointerMove(e) {
       applyTransform();
     }
   } else if (state.pointerCache.length === 2) {
-    // 핀치 줌 제어
+    // 핀치 줌 및 두 손가락 화면 이동(Pan) 제어
     const curDiff = getDistance(state.pointerCache[0], state.pointerCache[1]);
+    const centerX = (state.pointerCache[0].clientX + state.pointerCache[1].clientX) / 2;
+    const centerY = (state.pointerCache[0].clientY + state.pointerCache[1].clientY) / 2;
+    
     if (state.prevDiff > 0) {
       const zoomFactor = curDiff / state.prevDiff;
-      // 두 손가락 중심 좌표 구하기
-      const centerX = (state.pointerCache[0].clientX + state.pointerCache[1].clientX) / 2;
-      const centerY = (state.pointerCache[0].clientY + state.pointerCache[1].clientY) / 2;
       zoomAroundPoint(zoomFactor, centerX, centerY);
+      
+      // 두 손가락 중심점 이동량(Pan) 적용 (필기 모드 등에서도 자유로운 이동 지원)
+      if (state.prevPinchCenter) {
+        const dx = centerX - state.prevPinchCenter.x;
+        const dy = centerY - state.prevPinchCenter.y;
+        state.panX += dx;
+        state.panY += dy;
+        applyTransform();
+      }
     }
+    
     state.prevDiff = curDiff;
+    state.prevPinchCenter = { x: centerX, y: centerY };
   }
 }
 
@@ -958,6 +970,7 @@ function onPointerUp(e) {
   
   if (state.pointerCache.length < 2) {
     state.prevDiff = -1;
+    state.prevPinchCenter = null;
   }
   
   if (state.draggedNode && state.nodeDragStarted) {
