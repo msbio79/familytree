@@ -165,8 +165,20 @@ window.addEventListener('DOMContentLoaded', () => {
 function setupEventListeners() {
   // 테마 및 사이드바 토글
   el.themeToggleBtn.addEventListener('click', toggleTheme);
-  el.sidebarCollapseBtn.addEventListener('click', () => toggleSidebar(true));
-  el.sidebarToggleFloating.addEventListener('click', () => toggleSidebar(false));
+  
+  const handleSidebarCollapse = (e) => {
+    e.preventDefault();
+    toggleSidebar(true);
+  };
+  el.sidebarCollapseBtn.addEventListener('pointerdown', handleSidebarCollapse);
+  el.sidebarCollapseBtn.addEventListener('click', handleSidebarCollapse);
+  
+  const handleSidebarToggleFloating = (e) => {
+    e.preventDefault();
+    toggleSidebar(false);
+  };
+  el.sidebarToggleFloating.addEventListener('pointerdown', handleSidebarToggleFloating);
+  el.sidebarToggleFloating.addEventListener('click', handleSidebarToggleFloating);
   
   // 범례 확장/축소 및 크기 조절
   let legendScale = 1;
@@ -445,28 +457,40 @@ function setupEventListeners() {
   el.drawColor.addEventListener('input', (e) => state.drawSettings.color = e.target.value);
   el.drawWidth.addEventListener('input', (e) => state.drawSettings.width = parseInt(e.target.value));
   
-  el.drawPenBtn.addEventListener('click', () => {
+  const handleDrawPen = (e) => {
+    e.preventDefault();
     state.drawSettings.tool = 'pen';
     el.drawPenBtn.classList.add('active');
     el.drawEraserBtn.classList.remove('active');
-  });
+  };
+  el.drawPenBtn.addEventListener('pointerdown', handleDrawPen);
+  el.drawPenBtn.addEventListener('click', handleDrawPen);
   
-  el.drawEraserBtn.addEventListener('click', () => {
+  const handleDrawEraser = (e) => {
+    e.preventDefault();
     state.drawSettings.tool = 'eraser';
     el.drawEraserBtn.classList.add('active');
     el.drawPenBtn.classList.remove('active');
-  });
+  };
+  el.drawEraserBtn.addEventListener('pointerdown', handleDrawEraser);
+  el.drawEraserBtn.addEventListener('click', handleDrawEraser);
   
-  el.drawClearBtn.addEventListener('click', () => {
+  const handleDrawClear = (e) => {
+    e.preventDefault();
     el.drawLayer.innerHTML = '';
-  });
+  };
+  el.drawClearBtn.addEventListener('pointerdown', handleDrawClear);
+  el.drawClearBtn.addEventListener('click', handleDrawClear);
   
-  el.drawExitBtn.addEventListener('click', () => {
+  const handleDrawExit = (e) => {
+    e.preventDefault();
     setMode('select');
     if (el.sidebar.classList.contains('collapsed')) {
       toggleSidebar(false); // 사이드바 다시 펼치기
     }
-  });
+  };
+  el.drawExitBtn.addEventListener('pointerdown', handleDrawExit);
+  el.drawExitBtn.addEventListener('click', handleDrawExit);
   
   // 개체 직접 추가 버튼
   el.addMaleBtn.addEventListener('click', () => addIndividual('M'));
@@ -551,9 +575,26 @@ function setupEventListeners() {
   el.deleteNodeBtn.addEventListener('click', deleteSelected);
   
   // 줌 버튼 동작
-  el.zoomInBtn.addEventListener('click', () => zoom(1.2));
-  el.zoomOutBtn.addEventListener('click', () => zoom(0.8));
-  el.zoomFitBtn.addEventListener('click', fitToScreen);
+  const handleZoomIn = (e) => {
+    e.preventDefault();
+    zoom(1.2);
+  };
+  el.zoomInBtn.addEventListener('pointerdown', handleZoomIn);
+  el.zoomInBtn.addEventListener('click', handleZoomIn);
+
+  const handleZoomOut = (e) => {
+    e.preventDefault();
+    zoom(0.8);
+  };
+  el.zoomOutBtn.addEventListener('pointerdown', handleZoomOut);
+  el.zoomOutBtn.addEventListener('click', handleZoomOut);
+
+  const handleZoomFit = (e) => {
+    e.preventDefault();
+    fitToScreen();
+  };
+  el.zoomFitBtn.addEventListener('pointerdown', handleZoomFit);
+  el.zoomFitBtn.addEventListener('click', handleZoomFit);
   
   // SVG 마우스/터치 드래그 팬(Pan) 및 줌
   el.svg.addEventListener('pointerdown', onPointerDown, { passive: false });
@@ -577,7 +618,16 @@ function setupEventListeners() {
   
   // 윈도우 스크롤 및 바운스 제어 (가계도 드래그 및 필기 끊김 방지)
   window.addEventListener('touchmove', (e) => {
-    if (e.target.tagName.toLowerCase() === 'select' || e.target.tagName.toLowerCase() === 'option' || e.target.closest('foreignObject') || e.target.closest('#sidebar')) {
+    if (
+      e.target.tagName.toLowerCase() === 'select' || 
+      e.target.tagName.toLowerCase() === 'option' || 
+      e.target.closest('foreignObject') || 
+      e.target.closest('#sidebar') ||
+      e.target.closest('#draw-toolbar') ||
+      e.target.closest('#legend-overlay') ||
+      e.target.closest('.canvas-overlays') ||
+      e.target.closest('#sidebar-toggle-floating')
+    ) {
       return;
     }
     e.preventDefault();
