@@ -575,6 +575,14 @@ function setupEventListeners() {
   window.addEventListener('pointerup', cleanPointerFromCache);
   window.addEventListener('pointercancel', cleanPointerFromCache);
   
+  // 윈도우 스크롤 및 바운스 제어 (가계도 드래그 및 필기 끊김 방지)
+  window.addEventListener('touchmove', (e) => {
+    if (e.target.tagName.toLowerCase() === 'select' || e.target.tagName.toLowerCase() === 'option' || e.target.closest('foreignObject') || e.target.closest('#sidebar')) {
+      return;
+    }
+    e.preventDefault();
+  }, { passive: false });
+  
   // 터치 기기용 실제 터치 상태 강제 동기화 (아이패드 등 터치 꼬임 해결의 핵심)
   window.addEventListener('touchstart', syncPointerCacheWithTouches, { passive: true });
   window.addEventListener('touchmove', syncPointerCacheWithTouches, { passive: true });
@@ -710,7 +718,19 @@ function onPointerDown(e) {
   // [고속 연속 필기 및 획 씹힘 문제 해결]
   // 필기 모드일 경우 포인터 캐시 개수(1개 제한)를 조건으로 두지 않고, 포인터가 들어오는 즉시 필기/지우기 동작을 개시시킵니다.
   if (state.mode === 'draw') {
-    if (!state.drawingPointerId) {
+    const isPen = e.pointerType === 'pen';
+    const currentDrawingPointer = state.pointerCache.find(p => p.pointerId === state.drawingPointerId);
+    const isCurrentDrawingTouch = currentDrawingPointer && currentDrawingPointer.pointerType === 'touch';
+
+    // 드로잉 포인터가 없거나, 현재 그리는 주체가 일반 touch인데 새로운 pen 터치가 들어온 경우 (펜슬 우선권 보장)
+    if (!state.drawingPointerId || (isPen && isCurrentDrawingTouch)) {
+      // 만약 기존에 손바닥(touch)에 의해 잘못 시작된 드로잉 획이 있다면 캔버스에서 제거
+      if (isPen && isCurrentDrawingTouch && state.currentPath) {
+        state.currentPath.remove();
+        state.currentPath = null;
+        state.currentPathD = "";
+      }
+
       const canvasCoords = screenToCanvas(e.clientX, e.clientY);
       if (state.drawSettings.tool === 'pen') {
         state.currentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -725,7 +745,7 @@ function onPointerDown(e) {
         state.currentPath.setAttribute('pointer-events', 'stroke');
         el.drawLayer.appendChild(state.currentPath);
         
-        state.drawingPointerId = e.pointerId; // 팜 리젝션을 위한 드로잉 포인터 잠금
+        state.drawingPointerId = e.pointerId; // 드로잉 포인터 잠금
         
         e.preventDefault();
         return;
@@ -737,7 +757,7 @@ function onPointerDown(e) {
         return;
       }
     } else {
-      // 이미 활성 드로잉이 있는 경우 추가 펜/터치 입력(손바닥 등)은 무시
+      // 이미 펜슬 드로잉이 실행 중이거나, 펜슬이 아닌 일반 터치인데 이미 그리기가 선점된 경우 무시
       e.preventDefault();
       return;
     }
@@ -1878,7 +1898,7 @@ function render() {
           state.draggedNode = null;
           state.pointerCache = [];
           
-          render();
+          deselectAll(); // 유전자형 선택 완료 후 선택을 해제하여 옵션창을 즉시 닫음
         });
         
         // 유전자형이 지정되지 않은 경우 첫 번째 옵션 선택 시 change 이벤트가 트리거되지 않는 문제를 방지하기 위해 숨겨진 플레이스홀더를 삽입
