@@ -45,6 +45,7 @@ const state = {
   dragOffset: { x: 0, y: 0 },
   isPanning: false,
   panStart: { x: 0, y: 0 },
+  nodeDragStarted: false,
   
   // 부부 연결 시 첫 번째 선택 노드
   marryFirstNodeId: null,
@@ -527,7 +528,7 @@ function setupEventListeners() {
     if (state.selectedNodeId) {
       const node = findNode(state.selectedNodeId);
       if (node) {
-        node.genotype = e.target.value;
+        node.genotype = e.target.value === '-- 선택 --' ? '' : e.target.value;
         el.nodeGenotypeCustom.value = node.genotype;
         render();
       }
@@ -846,40 +847,47 @@ function onPointerMove(e) {
     if (state.draggedNode) {
       // 노드 드래그
       const canvasCoords = screenToCanvas(e.clientX, e.clientY);
-      state.draggedNode.x = canvasCoords.x - state.dragOffset.x;
-      state.draggedNode.y = canvasCoords.y - state.dragOffset.y;
+      const targetX = canvasCoords.x - state.dragOffset.x;
+      const targetY = canvasCoords.y - state.dragOffset.y;
       
       if (state.nodeDragStartCoords) {
         const totalDx = canvasCoords.x - state.nodeDragStartCoords.x;
         const totalDy = canvasCoords.y - state.nodeDragStartCoords.y;
         if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
+          state.nodeDragStarted = true;
           state.draggedNode.manualMoved = true; // 사용자가 실제로 5px 이상 드래그했음을 표시
         }
       } else {
+        state.nodeDragStarted = true;
         state.draggedNode.manualMoved = true;
       }
       
-      // 화면 밖 이탈 방지
-      state.draggedNode.x = Math.max(-2000, Math.min(2000, state.draggedNode.x));
-      state.draggedNode.y = Math.max(-2000, Math.min(2000, state.draggedNode.y));
-      
-      // 드래그 중인 일반 노드가 근처의 성별이 일치하는 플레이스홀더 빈칸에 근접해 있는지 검사
-      let closestPlaceholder = null;
-      let minDist = 60; // 60px 내로 진입하면 흡착 가능한 타겟으로 활성화
-      
-      state.nodes.forEach(n => {
-        if (n.isPlaceholder && n.gender === state.draggedNode.gender) {
-          const dist = Math.sqrt(Math.pow(state.draggedNode.x - n.x, 2) + Math.pow(state.draggedNode.y - n.y, 2));
-          if (dist < minDist) {
-            minDist = dist;
-            closestPlaceholder = n;
+      if (state.nodeDragStarted) {
+        state.draggedNode.x = targetX;
+        state.draggedNode.y = targetY;
+        
+        // 화면 밖 이탈 방지
+        state.draggedNode.x = Math.max(-2000, Math.min(2000, state.draggedNode.x));
+        state.draggedNode.y = Math.max(-2000, Math.min(2000, state.draggedNode.y));
+        
+        // 드래그 중인 일반 노드가 근처의 성별이 일치하는 플레이스홀더 빈칸에 근접해 있는지 검사
+        let closestPlaceholder = null;
+        let minDist = 60; // 60px 내로 진입하면 흡착 가능한 타겟으로 활성화
+        
+        state.nodes.forEach(n => {
+          if (n.isPlaceholder && n.gender === state.draggedNode.gender) {
+            const dist = Math.sqrt(Math.pow(state.draggedNode.x - n.x, 2) + Math.pow(state.draggedNode.y - n.y, 2));
+            if (dist < minDist) {
+              minDist = dist;
+              closestPlaceholder = n;
+            }
           }
-        }
-      });
-      
-      state.activePlaceholderTargetId = closestPlaceholder ? closestPlaceholder.id : null;
-      
-      render();
+        });
+        
+        state.activePlaceholderTargetId = closestPlaceholder ? closestPlaceholder.id : null;
+        
+        render();
+      }
     } else if (state.draggedFamilyNodes) {
       const canvasCoords = screenToCanvas(e.clientX, e.clientY);
       const dx = canvasCoords.x - state.dragOffset.x;
@@ -952,7 +960,7 @@ function onPointerUp(e) {
     state.prevDiff = -1;
   }
   
-  if (state.draggedNode) {
+  if (state.draggedNode && state.nodeDragStarted) {
     // 1. 빈칸 플레이스홀더에 드롭한 경우
     if (state.activePlaceholderTargetId) {
       fillPlaceholder(state.draggedNode.id, state.activePlaceholderTargetId);
@@ -991,6 +999,7 @@ function onPointerUp(e) {
   }
   
   state.draggedNode = null;
+  state.nodeDragStarted = false;
   state.draggedFamilyNodes = null;
   state.marriageClickId = null;
   state.marriageDragStartCoords = null;
@@ -1118,6 +1127,7 @@ function handleNodeClick(nodeId, e) {
     state.dragOffset.x = canvasCoords.x - node.x;
     state.dragOffset.y = canvasCoords.y - node.y;
     state.nodeDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
+    state.nodeDragStarted = false; // 아직 실제 5px 움직이지 않음
     
     showDetailPanel(node);
     render();
@@ -1559,13 +1569,16 @@ function updateDetailPanelGenotypes() {
   }
   
   // HTML 동적 주입
+  options.unshift('-- 선택 --');
   el.nodeGenotypeSelect.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
   
-  // 현재 노드의 유전자형이 옵션 목록에 없으면(초기 상태 등)
-  // 값을 강제로 할당하지 않고, 선택창을 비워둠(selectedIndex = -1)
-  if (!options.includes(node.genotype)) {
-    el.nodeGenotypeSelect.selectedIndex = -1;
+  // 현재 노드의 유전자형 세팅
+  if (!node.genotype) {
+    el.nodeGenotypeSelect.value = '-- 선택 --';
     el.nodeGenotypeCustom.value = '';
+  } else if (!options.includes(node.genotype)) {
+    el.nodeGenotypeSelect.selectedIndex = -1;
+    el.nodeGenotypeCustom.value = node.genotype;
   } else {
     el.nodeGenotypeSelect.value = node.genotype;
     el.nodeGenotypeCustom.value = node.genotype;
@@ -1826,8 +1839,20 @@ function render() {
           render();
         });
         
+        // 유전자형이 지정되지 않은 경우 첫 번째 옵션 선택 시 change 이벤트가 트리거되지 않는 문제를 방지하기 위해 숨겨진 플레이스홀더를 삽입
+        if (!n.genotype) {
+          const emptyOpt = document.createElement('option');
+          emptyOpt.value = '';
+          emptyOpt.textContent = '선택';
+          emptyOpt.selected = true;
+          emptyOpt.hidden = true;
+          emptyOpt.disabled = true;
+          select.appendChild(emptyOpt);
+        }
+
         // 사이드바용으로 업데이트된 최신 유전자형 옵션 목록을 그대로 복사하여 사용
         Array.from(el.nodeGenotypeSelect.options).forEach(opt => {
+          if (opt.value === '-- 선택 --') return; // 캔버스에서는 '-- 선택 --' 항목 표시 제외
           const option = document.createElement('option');
           option.value = opt.value;
           option.textContent = opt.textContent;
