@@ -57,6 +57,8 @@ const state = {
     tool: 'pen' // 'pen' or 'eraser'
   },
   currentPath: null,
+  currentPathD: "",
+  drawingPointerId: null,
   isErasing: false,
   
   // 상태 백업/되돌리기용 (향후 기능)
@@ -733,15 +735,19 @@ function onPointerDown(e) {
         state.currentPath.setAttribute('stroke-width', state.drawSettings.width);
         state.currentPath.setAttribute('stroke-linecap', 'round');
         state.currentPath.setAttribute('stroke-linejoin', 'round');
-        state.currentPath.setAttribute('d', `M ${canvasCoords.x} ${canvasCoords.y}`);
-        // 설정하여 지우개 작동 시 이벤트를 받을 수 있도록 함
+        
+        state.currentPathD = `M ${canvasCoords.x} ${canvasCoords.y}`;
+        state.currentPath.setAttribute('d', state.currentPathD);
         state.currentPath.setAttribute('pointer-events', 'stroke');
         el.drawLayer.appendChild(state.currentPath);
+        
+        state.drawingPointerId = e.pointerId; // 팜 리젝션을 위한 드로잉 포인터 잠금
         
         e.preventDefault();
         return;
       } else if (state.drawSettings.tool === 'eraser') {
         state.isErasing = true;
+        state.drawingPointerId = e.pointerId;
         eraseAtPointer(e.clientX, e.clientY);
         e.preventDefault();
         return;
@@ -832,21 +838,25 @@ function onPointerMove(e) {
     state.pointerCache = [e];
   }
   
-  if (state.pointerCache.length === 1) {
-    // 단일 터치 제어
-    if (state.mode === 'draw') {
-      if (state.drawSettings.tool === 'pen' && state.currentPath) {
-        const canvasCoords = screenToCanvas(e.clientX, e.clientY);
-        const d = state.currentPath.getAttribute('d');
-        state.currentPath.setAttribute('d', `${d} L ${canvasCoords.x} ${canvasCoords.y}`);
-        e.preventDefault();
-        return;
-      } else if (state.drawSettings.tool === 'eraser' && state.isErasing) {
-        eraseAtPointer(e.clientX, e.clientY);
-        e.preventDefault();
-        return;
-      }
+  // [팜 리젝션 및 획 끊김 방지 최적화]
+  // 필기/지우기 동작이 진행 중이고 이 이벤트를 발생시킨 포인터가 필기 주 포인터인 경우,
+  // 손바닥 등 멀티터치 간섭 상태와 무관하게 즉각 선을 그리거나 지우고 이벤트를 차단합니다.
+  if (state.mode === 'draw' && e.pointerId === state.drawingPointerId) {
+    if (state.drawSettings.tool === 'pen' && state.currentPath) {
+      const canvasCoords = screenToCanvas(e.clientX, e.clientY);
+      state.currentPathD += ` L ${canvasCoords.x} ${canvasCoords.y}`;
+      state.currentPath.setAttribute('d', state.currentPathD);
+      e.preventDefault();
+      return;
+    } else if (state.drawSettings.tool === 'eraser' && state.isErasing) {
+      eraseAtPointer(e.clientX, e.clientY);
+      e.preventDefault();
+      return;
     }
+  }
+  
+  if (state.pointerCache.length === 1) {
+    // 단일 터치 제어 (필기 드로잉 코드는 상단 인터셉터로 이동됨)
     
     if (state.draggedNode) {
       // 노드 드래그
@@ -964,11 +974,15 @@ function onPointerUp(e) {
   state.pointerCache = state.pointerCache.filter(p => p.pointerId !== e.pointerId);
   
   if (state.mode === 'draw') {
-    if (state.drawSettings.tool === 'pen' && state.currentPath) {
-      state.currentPath = null;
-    }
-    if (state.drawSettings.tool === 'eraser') {
-      state.isErasing = false;
+    if (e.pointerId === state.drawingPointerId) {
+      state.drawingPointerId = null;
+      state.currentPathD = "";
+      if (state.drawSettings.tool === 'pen' && state.currentPath) {
+        state.currentPath = null;
+      }
+      if (state.drawSettings.tool === 'eraser') {
+        state.isErasing = false;
+      }
     }
     // 필기 모드일 때는 화면 갱신이나 노드 드래그 종료를 처리할 필요 없음
     if (state.pointerCache.length === 0) return;
