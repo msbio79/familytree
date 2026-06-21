@@ -554,11 +554,11 @@ function setupEventListeners() {
   el.zoomFitBtn.addEventListener('click', fitToScreen);
   
   // SVG 마우스/터치 드래그 팬(Pan) 및 줌
-  el.svg.addEventListener('pointerdown', onPointerDown);
-  el.svg.addEventListener('pointermove', onPointerMove);
-  el.svg.addEventListener('pointerup', onPointerUp);
-  el.svg.addEventListener('pointercancel', onPointerUp);
-  el.svg.addEventListener('wheel', onWheel);
+  el.svg.addEventListener('pointerdown', onPointerDown, { passive: false });
+  el.svg.addEventListener('pointermove', onPointerMove, { passive: false });
+  el.svg.addEventListener('pointerup', onPointerUp, { passive: false });
+  el.svg.addEventListener('pointercancel', onPointerUp, { passive: false });
+  el.svg.addEventListener('wheel', onWheel, { passive: false });
   
   // 윈도우 레벨에서 포인터 해제/취소를 추가 감시하여 좀비 포인터 누적 방지
   const cleanPointerFromCache = (e) => {
@@ -692,9 +692,12 @@ function onPointerDown(e) {
     return;
   }
   
-  try {
-    el.svg.setPointerCapture(e.pointerId);
-  } catch(err) {}
+  // 필기 모드일 때는 잦은 획 그리기로 인한 포인터 캡처 오버헤드를 막기 위해 캡처 제외
+  if (state.mode !== 'draw') {
+    try {
+      el.svg.setPointerCapture(e.pointerId);
+    } catch(err) {}
+  }
   
   // 마우스인 경우 캐시 강제 초기화하여 좀비 터치 방지
   if (e.pointerType === 'mouse') {
@@ -950,9 +953,12 @@ function onPointerMove(e) {
 }
 
 function onPointerUp(e) {
-  try {
-    el.svg.releasePointerCapture(e.pointerId);
-  } catch(err) {}
+  // 필기 모드가 아닐 때만 캡처 해제 처리 (캡처 설정 자체가 제외되었으므로)
+  if (state.mode !== 'draw') {
+    try {
+      el.svg.releasePointerCapture(e.pointerId);
+    } catch(err) {}
+  }
 
   // 포인터 캐시에서 제거
   state.pointerCache = state.pointerCache.filter(p => p.pointerId !== e.pointerId);
