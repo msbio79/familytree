@@ -128,6 +128,7 @@ const el = {
   trait1Row: document.getElementById('trait1-row'),
   nodeTrait1Select: document.getElementById('node-trait1-select'),
   trait2Row: document.getElementById('trait2-row'),
+  trait2Label: document.getElementById('trait2-label'),
   nodeTrait2Select: document.getElementById('node-trait2-select'),
   nodeGenotypeSelect: document.getElementById('node-genotype-select'),
   nodeGenotypeCustom: document.getElementById('node-genotype-custom'),
@@ -1584,9 +1585,11 @@ function showDetailPanel(node) {
   if (state.settings.inheritanceMode === 'abo') {
     el.bloodTypeRow.style.display = 'flex';
     el.trait1Row.style.display = 'none';
+    if (el.trait2Label) el.trait2Label.textContent = '형질 2 (색상)';
   } else {
     el.bloodTypeRow.style.display = 'none';
     el.trait1Row.style.display = 'flex';
+    if (el.trait2Label) el.trait2Label.textContent = '형질 2 (빗금)';
   }
   
   // 유전자 설정에 맞게 선택형 리스트 갱신
@@ -2162,8 +2165,16 @@ function onLegendClick(e) {
   
   const target = e.currentTarget;
   const gender = target.getAttribute('data-gender');
-  const trait1 = target.getAttribute('data-trait1');
-  const trait2 = target.getAttribute('data-trait2');
+  let trait1 = target.getAttribute('data-trait1');
+  let trait2 = target.getAttribute('data-trait2');
+  
+  // ABO 모드일 때는 범례의 형질을 노드의 물리적 속성에 맞춰 번역합니다.
+  // ABO 모드에서 붉은 색(범례의 trait1)은 노드의 trait2(H/h 형질)에 매핑됩니다.
+  if (state.settings.inheritanceMode === 'abo') {
+    const isRed = (trait1 === 'affected');
+    trait1 = 'normal';
+    trait2 = isRed ? 'affected' : 'normal';
+  }
   
   if (state.selectedNodeId) {
     // 선택된 개체가 있으면 해당 개체의 속성을 변경
