@@ -463,6 +463,7 @@ input:checked + .slider:before {
   top: 0;
   left: 0;
   cursor: grab;
+  touch-action: none;
 }
 
 #pedigree-svg:active {
@@ -508,7 +509,7 @@ input:checked + .slider:before {
   border-radius: 12px;
   padding: 16px 20px;
   box-shadow: var(--glass-shadow);
-  max-width: 320px;
+  max-width: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -537,6 +538,7 @@ input:checked + .slider:before {
   gap: 12px;
   font-size: 0.9rem;
   color: var(--text-primary);
+  white-space: nowrap;
 }
 
 .legend-item.legend-draggable {

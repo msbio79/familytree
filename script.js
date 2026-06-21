@@ -165,7 +165,7 @@ function setupEventListeners() {
   el.sidebarToggleFloating.addEventListener('click', () => toggleSidebar(false));
   
   // 범례 확장/축소 및 크기 조절
-  let legendSizeMultiplier = 1;
+  let legendScale = 1;
   const legendToggleBtn = document.getElementById('legend-toggle-btn');
   const legendSizeBtn = document.getElementById('legend-size-btn');
   const legendItemsContainer = document.getElementById('legend-items-container');
@@ -181,9 +181,15 @@ function setupEventListeners() {
   });
 
   legendSizeBtn.addEventListener('click', () => {
-    legendSizeMultiplier = legendSizeMultiplier >= 3 ? 1 : legendSizeMultiplier + 1;
-    legendOverlay.style.transform = `scale(${legendSizeMultiplier})`;
-    legendOverlay.style.transformOrigin = 'top right';
+    if (legendScale === 1) {
+      legendScale = 2;
+    } else if (legendScale === 2) {
+      legendScale = 0.5;
+    } else {
+      legendScale = 1;
+    }
+    // 범례 헤더 및 아이콘 크기는 유지하고 내용물만 줌 조절
+    legendItemsContainer.style.zoom = legendScale;
   });
   
   // 설정 변경 시 UI 표시 여부를 결정하는 헬퍼 함수
@@ -552,6 +558,25 @@ function setupEventListeners() {
   el.svg.addEventListener('pointercancel', onPointerUp);
   el.svg.addEventListener('wheel', onWheel);
   
+  // 윈도우 레벨에서 포인터 해제/취소를 추가 감시하여 좀비 포인터 누적 방지
+  const cleanPointerFromCache = (e) => {
+    const index = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
+    if (index !== -1) {
+      state.pointerCache.splice(index, 1);
+    }
+    if (state.pointerCache.length < 2) {
+      state.prevDiff = -1;
+    }
+  };
+  window.addEventListener('pointerup', cleanPointerFromCache);
+  window.addEventListener('pointercancel', cleanPointerFromCache);
+  
+  // 터치 기기용 실제 터치 상태 강제 동기화 (아이패드 등 터치 꼬임 해결의 핵심)
+  window.addEventListener('touchstart', syncPointerCacheWithTouches, { passive: true });
+  window.addEventListener('touchmove', syncPointerCacheWithTouches, { passive: true });
+  window.addEventListener('touchend', syncPointerCacheWithTouches, { passive: true });
+  window.addEventListener('touchcancel', syncPointerCacheWithTouches, { passive: true });
+  
   // 범례 클릭 이벤트 바인딩
   document.querySelectorAll('.legend-draggable').forEach(item => {
     item.addEventListener('click', onLegendClick);
@@ -669,12 +694,17 @@ function onPointerDown(e) {
     el.svg.setPointerCapture(e.pointerId);
   } catch(err) {}
   
-  // 멀티터치를 위해 포인터 등록 (중복 방지)
-  const existingIndex = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
-  if (existingIndex !== -1) {
-    state.pointerCache[existingIndex] = e;
+  // 마우스인 경우 캐시 강제 초기화하여 좀비 터치 방지
+  if (e.pointerType === 'mouse') {
+    state.pointerCache = [e];
   } else {
-    state.pointerCache.push(e);
+    // 멀티터치를 위해 포인터 등록 (중복 방지)
+    const existingIndex = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
+    if (existingIndex !== -1) {
+      state.pointerCache[existingIndex] = e;
+    } else {
+      state.pointerCache.push(e);
+    }
   }
   
   // closest를 사용하여 텍스트나 빗금 오버레이 클릭 시에도 정상 그룹 데이터 매칭되도록 보완
@@ -790,6 +820,11 @@ function onPointerMove(e) {
   const index = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
   if (index !== -1) {
     state.pointerCache[index] = e;
+  }
+  
+  // 마우스인데 캐시 개수가 비정상인 경우 강제 리셋
+  if (e.pointerType === 'mouse' && state.pointerCache.length !== 1) {
+    state.pointerCache = [e];
   }
   
   if (state.pointerCache.length === 1) {
@@ -972,6 +1007,24 @@ function onWheel(e) {
 }
 
 // --- 10. 좌표 및 화면 비율 계산 함수들 ---
+// 터치 기기(아이패드 등)에서 실제 활성화된 물리 터치 개수와 포인터 캐시 강제 동기화
+function syncPointerCacheWithTouches(e) {
+  if (e.touches) {
+    if (e.touches.length === 0) {
+      state.pointerCache = [];
+      state.prevDiff = -1;
+    } else if (e.touches.length === 1 && state.pointerCache.length > 1) {
+      // 물리 터치는 1개인데 좀비 캐시가 남아있는 경우, 마지막 터치 정보 1개만 남기고 정리
+      if (state.pointerCache.length > 0) {
+        state.pointerCache = [state.pointerCache[state.pointerCache.length - 1]];
+      } else {
+        state.pointerCache = [];
+      }
+      state.prevDiff = -1;
+    }
+  }
+}
+
 function getDistance(p1, p2) {
   return Math.sqrt(Math.pow(p1.clientX - p2.clientX, 2) + Math.pow(p1.clientY - p2.clientY, 2));
 }
@@ -1425,8 +1478,8 @@ function updateDetailPanelGenotypes() {
 
   if (state.settings.inheritanceMode === 'abo') {
     let aboOptions = [
-      'AA', 'AO', 'A_', 'A?',
-      'BB', 'BO', 'B_', 'B?',
+      'AA', 'AO', 'A_',
+      'BB', 'BO', 'B_',
       'AB', 'OO'
     ];
     
@@ -1435,7 +1488,7 @@ function updateDetailPanelGenotypes() {
     } else {
       let t2Options = [];
       if (chr === 'autosomal') {
-        t2Options = [`${L2_D}${L2_D}`, `${L2_D}${L2_R}`, `${L2_R}${L2_R}`, `${L2_D}_`, `${L2_R}_`, `${L2_D}?`];
+        t2Options = [`${L2_D}${L2_D}`, `${L2_D}${L2_R}`, `${L2_R}${L2_R}`, `${L2_D}_`, `${L2_R}_`];
       } else { // sex_linked
         if (gender === 'M') {
           t2Options = [`X${S2_D}Y`, `X${S2_R}Y`];
@@ -1452,7 +1505,7 @@ function updateDetailPanelGenotypes() {
     }
   } else if (chr === 'mixed') {
     // 복합 유전: 1형질(상염색체) + 2형질(성염색체)
-    const t1Options = [`${L1_D}${L1_D}`, `${L1_D}${L1_R}`, `${L1_R}${L1_R}`, `${L1_D}_`, `${L1_R}_`, `${L1_D}?`];
+    const t1Options = [`${L1_D}${L1_D}`, `${L1_D}${L1_R}`, `${L1_R}${L1_R}`, `${L1_D}_`, `${L1_R}_`];
     let t2Options = [];
     if (gender === 'M') {
       t2Options = [`X${S2_D}Y`, `X${S2_R}Y`];
@@ -1467,15 +1520,15 @@ function updateDetailPanelGenotypes() {
   } else if (chr === 'autosomal') {
     // 상염색체
     if (traitCnt === 1) {
-      options = [`${L1_D}${L1_D}`, `${L1_D}${L1_R}`, `${L1_R}${L1_R}`, `${L1_D}_`, `${L1_R}_`, `${L1_D}?`];
+      options = [`${L1_D}${L1_D}`, `${L1_D}${L1_R}`, `${L1_R}${L1_R}`, `${L1_D}_`, `${L1_R}_`];
     } else {
       if (state.settings.linkage === 'coupling') {
-        options = [`${L1_D}${L2_D}/${L1_D}${L2_D}`, `${L1_D}${L2_D}/${L1_R}${L2_R}`, `${L1_R}${L2_R}/${L1_R}${L2_R}`, `${L1_D}${L2_D}/?`, `${L1_R}${L2_R}/?`];
+        options = [`${L1_D}${L2_D}/${L1_D}${L2_D}`, `${L1_D}${L2_D}/${L1_R}${L2_R}`, `${L1_R}${L2_R}/${L1_R}${L2_R}`];
       } else if (state.settings.linkage === 'repulsion') {
-        options = [`${L1_D}${L2_R}/${L1_D}${L2_R}`, `${L1_D}${L2_R}/${L1_R}${L2_D}`, `${L1_R}${L2_D}/${L1_R}${L2_D}`, `${L1_D}${L2_R}/?`, `${L1_R}${L2_D}/?`];
+        options = [`${L1_D}${L2_R}/${L1_D}${L2_R}`, `${L1_D}${L2_R}/${L1_R}${L2_D}`, `${L1_R}${L2_D}/${L1_R}${L2_D}`];
       } else {
         // 2형질 독립
-        options = [`${L1_D}${L1_D}${L2_D}${L2_D}`, `${L1_D}${L1_R}${L2_D}${L2_D}`, `${L1_R}${L1_R}${L2_D}${L2_D}`, `${L1_D}${L1_D}${L2_D}${L2_R}`, `${L1_D}${L1_R}${L2_D}${L2_R}`, `${L1_R}${L1_R}${L2_D}${L2_R}`, `${L1_D}${L1_D}${L2_R}${L2_R}`, `${L1_D}${L1_R}${L2_R}${L2_R}`, `${L1_R}${L1_R}${L2_R}${L2_R}`, `${L1_D}_${L2_D}_`, `${L1_D}_${L2_R}${L2_R}`, `${L1_R}${L1_R}${L2_D}_`, `${L1_D}?${L2_D}?`];
+        options = [`${L1_D}${L1_D}${L2_D}${L2_D}`, `${L1_D}${L1_R}${L2_D}${L2_D}`, `${L1_R}${L1_R}${L2_D}${L2_D}`, `${L1_D}${L1_D}${L2_D}${L2_R}`, `${L1_D}${L1_R}${L2_D}${L2_R}`, `${L1_R}${L1_R}${L2_D}${L2_R}`, `${L1_D}${L1_D}${L2_R}${L2_R}`, `${L1_D}${L1_R}${L2_R}${L2_R}`, `${L1_R}${L1_R}${L2_R}${L2_R}`, `${L1_D}_${L2_D}_`, `${L1_D}_${L2_R}${L2_R}`, `${L1_R}${L1_R}${L2_D}_`];
       }
     }
   } else {
