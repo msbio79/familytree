@@ -665,8 +665,17 @@ function onPointerDown(e) {
     return;
   }
   
-  // 멀티터치를 위해 포인터 등록
-  state.pointerCache.push(e);
+  try {
+    el.svg.setPointerCapture(e.pointerId);
+  } catch(err) {}
+  
+  // 멀티터치를 위해 포인터 등록 (중복 방지)
+  const existingIndex = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
+  if (existingIndex !== -1) {
+    state.pointerCache[existingIndex] = e;
+  } else {
+    state.pointerCache.push(e);
+  }
   
   // closest를 사용하여 텍스트나 빗금 오버레이 클릭 시에도 정상 그룹 데이터 매칭되도록 보완
   const nodeGroup = target.closest('.pedigree-node');
@@ -886,6 +895,10 @@ function onPointerMove(e) {
 }
 
 function onPointerUp(e) {
+  try {
+    el.svg.releasePointerCapture(e.pointerId);
+  } catch(err) {}
+
   // 포인터 캐시에서 제거
   state.pointerCache = state.pointerCache.filter(p => p.pointerId !== e.pointerId);
   

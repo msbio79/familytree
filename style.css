@@ -63,6 +63,8 @@
   margin: 0;
   padding: 0;
   user-select: none; /* Prevent accidental text selection while dragging */
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   -webkit-user-drag: none;
 }
 
