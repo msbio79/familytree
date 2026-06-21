@@ -718,6 +718,27 @@ function onPointerDown(e) {
   // [고속 연속 필기 및 획 씹힘 문제 해결]
   // 필기 모드일 경우 포인터 캐시 개수(1개 제한)를 조건으로 두지 않고, 포인터가 들어오는 즉시 필기/지우기 동작을 개시시킵니다.
   if (state.mode === 'draw') {
+    const touchPointers = state.pointerCache.filter(p => p.pointerType === 'touch');
+    if (touchPointers.length >= 2) {
+      const currentDrawingPointer = state.pointerCache.find(p => p.pointerId === state.drawingPointerId);
+      if (!currentDrawingPointer || currentDrawingPointer.pointerType === 'touch') {
+        if (state.currentPath) {
+          state.currentPath.remove();
+          state.currentPath = null;
+          state.currentPathD = "";
+        }
+        state.drawingPointerId = null;
+        state.isErasing = false;
+      }
+      
+      state.isPanning = false;
+      state.draggedNode = null;
+      if (state.pointerCache.length >= 2) {
+        state.prevDiff = getDistance(state.pointerCache[0], state.pointerCache[1]);
+      }
+      return;
+    }
+
     const isPen = e.pointerType === 'pen';
     const currentDrawingPointer = state.pointerCache.find(p => p.pointerId === state.drawingPointerId);
     const isCurrentDrawingTouch = currentDrawingPointer && currentDrawingPointer.pointerType === 'touch';
@@ -871,6 +892,20 @@ function onPointerMove(e) {
   // 필기/지우기 동작이 진행 중이고 이 이벤트를 발생시킨 포인터가 필기 주 포인터인 경우,
   // 손바닥 등 멀티터치 간섭 상태와 무관하게 즉각 선을 그리거나 지우고 이벤트를 차단합니다.
   if (state.mode === 'draw' && e.pointerId === state.drawingPointerId) {
+    const touchPointers = state.pointerCache.filter(p => p.pointerType === 'touch');
+    if (touchPointers.length >= 2) {
+      const currentDrawingPointer = state.pointerCache.find(p => p.pointerId === state.drawingPointerId);
+      if (!currentDrawingPointer || currentDrawingPointer.pointerType === 'touch') {
+        if (state.currentPath) {
+          state.currentPath.remove();
+          state.currentPath = null;
+          state.currentPathD = "";
+        }
+        state.drawingPointerId = null;
+        state.isErasing = false;
+        return;
+      }
+    }
     if (state.drawSettings.tool === 'pen' && state.currentPath) {
       const canvasCoords = screenToCanvas(e.clientX, e.clientY);
       state.currentPathD += ` L ${canvasCoords.x} ${canvasCoords.y}`;
@@ -1081,6 +1116,18 @@ function onWheel(e) {
 // 터치 기기(아이패드 등)에서 실제 활성화된 물리 터치 개수와 포인터 캐시 강제 동기화
 function syncPointerCacheWithTouches(e) {
   if (e.touches) {
+    if (e.touches.length >= 2 && state.mode === 'draw') {
+      const currentDrawingPointer = state.pointerCache.find(p => p.pointerId === state.drawingPointerId);
+      if (!currentDrawingPointer || currentDrawingPointer.pointerType === 'touch') {
+        if (state.currentPath) {
+          state.currentPath.remove();
+          state.currentPath = null;
+          state.currentPathD = "";
+        }
+        state.drawingPointerId = null;
+        state.isErasing = false;
+      }
+    }
     if (e.touches.length === 0) {
       state.pointerCache = [];
       state.prevDiff = -1;
