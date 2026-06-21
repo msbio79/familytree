@@ -102,6 +102,7 @@ const el = {
   modeSelect: document.getElementById('mode-select'),
   modeMarry: document.getElementById('mode-marry'),
   modeDraw: document.getElementById('mode-draw'),
+  sidebarDrawClearBtn: document.getElementById('sidebar-draw-clear-btn'),
   
   // 필기 모드 툴바
   drawToolbar: document.getElementById('draw-toolbar'),
@@ -482,6 +483,14 @@ function setupEventListeners() {
   };
   el.drawClearBtn.addEventListener('pointerdown', handleDrawClear);
   el.drawClearBtn.addEventListener('click', handleDrawClear);
+  
+  const handleSidebarDrawClear = (e) => {
+    e.preventDefault();
+    el.drawLayer.innerHTML = '';
+    showToast("모든 필기가 지워졌습니다.");
+  };
+  el.sidebarDrawClearBtn.addEventListener('pointerdown', handleSidebarDrawClear);
+  el.sidebarDrawClearBtn.addEventListener('click', handleSidebarDrawClear);
   
   const handleDrawExit = (e) => {
     e.preventDefault();

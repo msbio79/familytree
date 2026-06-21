@@ -299,6 +299,12 @@ body {
   color: rgba(255, 255, 255, 0.8);
 }
 
+#sidebar-draw-clear-btn:hover {
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+}
+
 /* Settings Form Controls */
 .settings-group {
   display: flex;
