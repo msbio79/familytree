@@ -694,13 +694,6 @@ function onPointerDown(e) {
     return;
   }
   
-  // 필기 모드일 때는 잦은 획 그리기로 인한 포인터 캡처 오버헤드를 막기 위해 캡처 제외
-  if (state.mode !== 'draw') {
-    try {
-      el.svg.setPointerCapture(e.pointerId);
-    } catch(err) {}
-  }
-  
   // 마우스인 경우 캐시 강제 초기화하여 좀비 터치 방지
   if (e.pointerType === 'mouse') {
     state.pointerCache = [e];
@@ -713,20 +706,11 @@ function onPointerDown(e) {
       state.pointerCache.push(e);
     }
   }
-  
-  // closest를 사용하여 텍스트나 빗금 오버레이 클릭 시에도 정상 그룹 데이터 매칭되도록 보완
-  const nodeGroup = target.closest('.pedigree-node');
-  const nodeId = nodeGroup ? nodeGroup.getAttribute('data-node-id') : null;
-  
-  const marriageGroup = target.closest('.marriage-node');
-  const marriageId = marriageGroup ? marriageGroup.getAttribute('data-marriage-id') : null;
-  
-  const connectionLine = target.closest('.pedigree-connection-line');
-  const familyMarriageId = connectionLine ? connectionLine.getAttribute('data-family-marriage-id') : null;
-  
-  if (state.pointerCache.length === 1) {
-    // 단일 터치/클릭
-    if (state.mode === 'draw') {
+
+  // [고속 연속 필기 및 획 씹힘 문제 해결]
+  // 필기 모드일 경우 포인터 캐시 개수(1개 제한)를 조건으로 두지 않고, 포인터가 들어오는 즉시 필기/지우기 동작을 개시시킵니다.
+  if (state.mode === 'draw') {
+    if (!state.drawingPointerId) {
       const canvasCoords = screenToCanvas(e.clientX, e.clientY);
       if (state.drawSettings.tool === 'pen') {
         state.currentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
@@ -752,7 +736,32 @@ function onPointerDown(e) {
         e.preventDefault();
         return;
       }
+    } else {
+      // 이미 활성 드로잉이 있는 경우 추가 펜/터치 입력(손바닥 등)은 무시
+      e.preventDefault();
+      return;
     }
+  }
+  
+  // 필기 모드가 아닐 때만 잦은 획 그리기로 인한 포인터 캡처 오버헤드를 막기 위해 캡처 수행
+  if (state.mode !== 'draw') {
+    try {
+      el.svg.setPointerCapture(e.pointerId);
+    } catch(err) {}
+  }
+  
+  // closest를 사용하여 텍스트나 빗금 오버레이 클릭 시에도 정상 그룹 데이터 매칭되도록 보완
+  const nodeGroup = target.closest('.pedigree-node');
+  const nodeId = nodeGroup ? nodeGroup.getAttribute('data-node-id') : null;
+  
+  const marriageGroup = target.closest('.marriage-node');
+  const marriageId = marriageGroup ? marriageGroup.getAttribute('data-marriage-id') : null;
+  
+  const connectionLine = target.closest('.pedigree-connection-line');
+  const familyMarriageId = connectionLine ? connectionLine.getAttribute('data-family-marriage-id') : null;
+  
+  if (state.pointerCache.length === 1) {
+    // 단일 터치/클릭 (필기 드로잉 처리부는 상단 고속 인터셉터로 이동됨)
     
     if (nodeId) {
       const now = Date.now();
