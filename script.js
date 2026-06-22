@@ -633,8 +633,19 @@ function setupEventListeners() {
   // SVG 마우스/터치 드래그 팬(Pan) 및 줌
   el.svg.addEventListener('pointerdown', onPointerDown, { passive: false });
   el.svg.addEventListener('pointermove', onPointerMove, { passive: false });
-  el.svg.addEventListener('pointerup', onPointerUp, { passive: false });
-  el.svg.addEventListener('pointercancel', onPointerUp, { passive: false });
+  window.addEventListener('pointerup', onPointerUp, { passive: false });
+  window.addEventListener('pointercancel', onPointerUp, { passive: false });
+
+  // Safari <select> 버그(pointerup 누락)에 의한 고스트 터치 완벽 해결을 위해 실제 터치 수와 동기화
+  window.addEventListener('touchstart', (e) => {
+    if (e.touches && state.pointerCache.length > e.touches.length) {
+      // 실제 물리적 터치 개수보다 캐시에 포인터가 많으면, 고스트 터치가 남아있는 것이므로 전부 초기화
+      state.pointerCache = [];
+      state.initialPinchDistance = null;
+      state.initialScale = null;
+      state.initialCanvasCenter = null;
+    }
+  }, { passive: true });
   el.svg.addEventListener('wheel', onWheel, { passive: false });
   
   // 윈도우 레벨에서 포인터 해제/취소를 추가 감시하여 좀비 포인터 누적 방지
@@ -819,11 +830,6 @@ function onPointerDown(e) {
   if (e.pointerType === 'mouse') {
     state.pointerCache = [e];
   } else {
-    // 만약 첫번째 터치(primary)라면 이전 캐시 비우기 (iOS/iPadOS select 조작 시 발생하는 고스트 터치 완벽 해결)
-    if (e.isPrimary) {
-      state.pointerCache = [];
-    }
-    
     // 멀티터치를 위해 포인터 등록 (중복 방지, Safari 이벤트 객체 재사용 버그 방지를 위해 복사본 저장)
     const cachedPointer = {
       pointerId: e.pointerId,
