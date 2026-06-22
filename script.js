@@ -1185,17 +1185,7 @@ function onPointerMove(e) {
         }
       }
       
-      if (state.draggedFamilyOriginals) {
-        state.draggedFamilyNodes.forEach(n => {
-          const orig = state.draggedFamilyOriginals.find(o => o.id === n.id);
-          if (orig) {
-            n.x = orig.x + totalDx;
-            n.y = orig.y + totalDy;
-          }
-        });
-      }
-      
-      render();
+      updateFamilyDragDOM(totalDx, totalDy);
     } else if (state.isPanning) {
       // 캔버스 드래그 이동
       state.panX = e.clientX - state.panStart.x;
@@ -1239,8 +1229,19 @@ function onPointerMove(e) {
 function onPointerUp(e) {
   if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
   const target = e.target;
-  // 유전자형 select 등 폼 요소 클릭 시 캔버스 렌더링(DOM 파괴) 방지
-  if (target && target.tagName && (target.tagName.toLowerCase() === 'select' || target.tagName.toLowerCase() === 'option' || target.closest('foreignObject'))) {
+  // 유전자형 select 등 폼 요소 및 UI 오버레이 영역 클릭 시 캔버스 렌더링(DOM 파괴) 방지
+  if (target && target.tagName && (
+    target.tagName.toLowerCase() === 'select' || 
+    target.tagName.toLowerCase() === 'option' || 
+    (target.closest && (
+      target.closest('foreignObject') ||
+      target.closest('#sidebar') ||
+      target.closest('#legend-overlay') ||
+      target.closest('#draw-toolbar') ||
+      target.closest('.canvas-overlays') ||
+      target.closest('#sidebar-toggle-floating')
+    ))
+  )) {
     return;
   }
 
@@ -1351,6 +1352,7 @@ function onPointerUp(e) {
   state.marriageDragStartCoords = null;
   state.nodeDragStartCoords = null;
   state.isPanning = false;
+  state.marriageDragStarted = false;
   
   // 성공적으로 단일 터치 제스처가 끝났으므로 백업된 선택 정보 초기화
   state.prevSelectedNodeId = undefined;
@@ -1515,16 +1517,7 @@ function onTouchMove(e) {
         }
       }
       
-      if (state.draggedFamilyOriginals) {
-        state.draggedFamilyNodes.forEach(n => {
-          const orig = state.draggedFamilyOriginals.find(o => o.id === n.id);
-          if (orig) {
-            n.x = orig.x + totalDx;
-            n.y = orig.y + totalDy;
-          }
-        });
-      }
-      render();
+      updateFamilyDragDOM(totalDx, totalDy);
     } else if (state.isPanning) {
       state.panX = touch.clientX - state.panStart.x;
       state.panY = touch.clientY - state.panStart.y;
@@ -1563,7 +1556,19 @@ function onTouchMove(e) {
 
 function onTouchEnd(e) {
   const target = e.target;
-  if (target && target.tagName && (target.tagName.toLowerCase() === 'select' || target.tagName.toLowerCase() === 'option' || target.closest('foreignObject'))) {
+  // 폼 요소 및 UI 오버레이 영역 터치 시 캔버스 렌더링(DOM 파괴) 방지
+  if (target && target.tagName && (
+    target.tagName.toLowerCase() === 'select' || 
+    target.tagName.toLowerCase() === 'option' || 
+    (target.closest && (
+      target.closest('foreignObject') ||
+      target.closest('#sidebar') ||
+      target.closest('#legend-overlay') ||
+      target.closest('#draw-toolbar') ||
+      target.closest('.canvas-overlays') ||
+      target.closest('#sidebar-toggle-floating')
+    ))
+  )) {
     return;
   }
   
@@ -1636,6 +1641,7 @@ function onTouchEnd(e) {
     state.marriageDragStartCoords = null;
     state.nodeDragStartCoords = null;
     state.isPanning = false;
+    state.marriageDragStarted = false;
     
     state.prevSelectedNodeId = undefined;
     state.prevSelectedMarriageId = undefined;
@@ -2657,6 +2663,7 @@ function render() {
     if (state.settings.showGenotype && !n.isPlaceholder) {
       if (isSelected && state.mode === 'select') {
         const select = document.createElement('select');
+        select.setAttribute('data-node-id', n.id);
         select.style.position = 'absolute';
         select.style.left = `${n.x - 60}px`;
         select.style.top = `${n.y - 65}px`;
@@ -2804,6 +2811,67 @@ function render() {
     }
     
     el.nodesGroup.appendChild(group);
+  });
+}
+
+// 부부/가족 드래그 시 성능 최적화를 위해 DOM 속성을 직접 변경하는 경량 함수
+function updateFamilyDragDOM(totalDx, totalDy) {
+  if (!state.draggedFamilyNodes || !state.draggedFamilyOriginals) return;
+  
+  // 1. 가족 구성원 노드 및 HTML overlay select 이동
+  state.draggedFamilyNodes.forEach(n => {
+    const orig = state.draggedFamilyOriginals.find(o => o.id === n.id);
+    if (orig) {
+      n.x = orig.x + totalDx;
+      n.y = orig.y + totalDy;
+      
+      const nodeEl = el.nodesGroup.querySelector(`[data-node-id="${n.id}"]`);
+      if (nodeEl) {
+        nodeEl.setAttribute('transform', `translate(${n.x}, ${n.y})`);
+      }
+      
+      const selectEl = el.htmlOverlayLayer.querySelector(`select[data-node-id="${n.id}"]`);
+      if (selectEl) {
+        selectEl.style.left = `${n.x - 60}px`;
+        selectEl.style.top = `${n.y - 65}px`;
+      }
+    }
+  });
+  
+  // 2. 현재 드래그 중인 가족 구성원에 해당하는 결혼 관계 ID 추출
+  const familyMarriageIds = new Set();
+  state.marriages.forEach(m => {
+    const hasP1 = state.draggedFamilyNodes.some(n => n.id === m.partner1Id);
+    const hasP2 = state.draggedFamilyNodes.some(n => n.id === m.partner2Id);
+    if (hasP1 && hasP2) {
+      familyMarriageIds.add(m.id);
+    }
+  });
+  
+  // 3. 결혼 노드(중앙 원) 및 연결선 이동
+  familyMarriageIds.forEach(mId => {
+    const m = findMarriage(mId);
+    if (!m) return;
+    
+    const p1Orig = state.draggedFamilyOriginals.find(o => o.id === m.partner1Id);
+    const p2Orig = state.draggedFamilyOriginals.find(o => o.id === m.partner2Id);
+    if (p1Orig && p2Orig) {
+      const midX = (p1Orig.x + p2Orig.x) / 2 + totalDx;
+      const midY = (p1Orig.y + p2Orig.y) / 2 + totalDy;
+      
+      const marriageEl = el.linesGroup.querySelector(`.marriage-node[data-marriage-id="${m.id}"]`);
+      if (marriageEl) {
+        marriageEl.setAttribute('transform', `translate(${midX}, ${midY})`);
+        if (state.marriageDragStarted) {
+          marriageEl.classList.add('dragging');
+        }
+      }
+    }
+    
+    const lines = el.linesGroup.querySelectorAll(`line[data-family-marriage-id="${m.id}"]`);
+    lines.forEach(lineEl => {
+      lineEl.setAttribute('transform', `translate(${totalDx}, ${totalDy})`);
+    });
   });
 }
 
