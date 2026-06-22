@@ -1103,10 +1103,8 @@ function onPointerMove(e) {
       state.draggedFamilyNodes.forEach(n => {
         n.x += dx;
         n.y += dy;
-        // 실제 드래그로 판별되었을 때만 수동 이동으로 처리 (터치 시 미세한 떨림 무시)
-        if (state.marriageDragStarted) {
-          n.manualMoved = true;
-        }
+        // 가족 전체 이동 시 개별 노드의 manualMoved(수동 배치 여부)는 변경하지 않음
+        // (그래야 나중에 자손을 추가할 때 자동 정렬이 유지됨)
       });
       
       state.dragOffset.x = canvasCoords.x;
@@ -1234,6 +1232,13 @@ function onWheel(e) {
 // 터치 기기(아이패드 등)에서 실제 활성화된 물리 터치 개수와 포인터 캐시 강제 동기화
 function syncPointerCacheWithTouches(e) {
   if (e.touches) {
+    // 화면에 첫 터치가 닿은 순간(touchstart), 아직 이 터치에 대한 pointerdown은 발생하기 전입니다.
+    // 따라서 이 시점에 캐시에 남아있는 touch/pen 포인터는 무조건 이전 조작에서 남은 고스트 터치입니다.
+    if (e.type === 'touchstart' && e.touches.length === 1) {
+      state.pointerCache = state.pointerCache.filter(p => p.pointerType !== 'touch' && p.pointerType !== 'pen');
+      state.prevDiff = -1;
+    }
+    
     if (e.touches.length >= 2 && state.mode === 'draw') {
       const currentDrawingPointer = state.pointerCache.find(p => p.pointerId === state.drawingPointerId);
       if (!currentDrawingPointer || currentDrawingPointer.pointerType === 'touch') {
@@ -1472,6 +1477,7 @@ function addIndividual(gender, trait1 = 'normal', trait2 = 'normal') {
     trait2: trait2,
     name: '',
     genotype: '',
+    isNew: true,
     parentMarriageId: null
   };
   
@@ -1508,10 +1514,10 @@ function addCouple() {
   const idF = 'n_' + Date.now() + '_F';
   
   const maleNode = {
-    id: idM, x: targetX - 80, y: targetY, gender: 'M', name: '', trait1: 'normal', trait2: 'normal', parentMarriageId: null, genotype: ''
+    id: idM, x: targetX - 80, y: targetY, gender: 'M', name: '', trait1: 'normal', trait2: 'normal', parentMarriageId: null, genotype: '', isNew: true
   };
   const femaleNode = {
-    id: idF, x: targetX + 80, y: targetY, gender: 'F', name: '', trait1: 'normal', trait2: 'normal', parentMarriageId: null, genotype: ''
+    id: idF, x: targetX + 80, y: targetY, gender: 'F', name: '', trait1: 'normal', trait2: 'normal', parentMarriageId: null, genotype: '', isNew: true
   };
   
   state.nodes.push(maleNode, femaleNode);
@@ -1565,6 +1571,7 @@ function addChildToMarriage(marriageId) {
     trait2: 'normal',
     parentMarriageId: marriageId,
     genotype: '',
+    isNew: true,
     manualMoved: false
   };
   
@@ -1799,15 +1806,15 @@ function updateDetailPanelGenotypes() {
   
   // HTML 동적 주입
   options.unshift('-- 선택 --');
-  el.nodeGenotypeSelect.innerHTML = options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+  el.nodeGenotypeSelect.innerHTML = options.map(opt => `<option value="${opt}" style="text-align: center;">${opt}</option>`).join('');
+  el.nodeGenotypeSelect.style.textAlign = 'center';
   
   // 현재 노드의 유전자형 세팅
-  if (!node.genotype) {
+  if (!node.genotype || !options.includes(node.genotype)) {
+    // 사용자의 요청에 따라 모든 상황에서 기본값으로 '-- 선택 --'을 표시하도록 원래대로 복구
     el.nodeGenotypeSelect.value = '-- 선택 --';
     el.nodeGenotypeCustom.value = '';
-  } else if (!options.includes(node.genotype)) {
-    el.nodeGenotypeSelect.value = '-- 선택 --';
-    el.nodeGenotypeCustom.value = node.genotype;
+    if (node.isNew) node.isNew = false;
   } else {
     el.nodeGenotypeSelect.value = node.genotype;
     el.nodeGenotypeCustom.value = node.genotype;
