@@ -279,7 +279,14 @@
         </div>
         <div class="toolbar-content">
           <div class="toolbar-group">
-            <input type="color" id="draw-color" value="#ef4444" style="width:32px; height:32px; border:none; padding:0; cursor:pointer; background:transparent;" title="펜 색상">
+            <div class="color-presets" style="display: flex; gap: 6px; margin-right: 8px;">
+              <button class="btn-color-preset active" data-color="#000000" style="background-color: #000000;" title="검은색"></button>
+              <button class="btn-color-preset" data-color="#ef4444" style="background-color: #ef4444;" title="빨간색"></button>
+              <button class="btn-color-preset" data-color="#3b82f6" style="background-color: #3b82f6;" title="파란색"></button>
+              <button class="btn-color-preset" data-color="#ffffff" style="background-color: #ffffff;" title="흰색"></button>
+              <button class="btn-color-preset" data-color="#eab308" style="background-color: #eab308;" title="노란색"></button>
+            </div>
+            <input type="color" id="draw-color" value="#000000" style="width:32px; height:32px; border:none; padding:0; cursor:pointer; background:transparent;" title="사용자 지정 색상">
             <input type="range" id="draw-width" min="1" max="15" value="3" style="width: 80px;" title="펜 굵기">
           </div>
           <div class="toolbar-divider"></div>

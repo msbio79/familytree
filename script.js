@@ -52,7 +52,7 @@ const state = {
   
   // 터치 제스처용 캐시
   drawSettings: {
-    color: '#ef4444',
+    color: '#000000',
     width: 3,
     tool: 'pen' // 'pen' or 'eraser'
   },
@@ -458,7 +458,29 @@ function setupEventListeners() {
   el.modeDraw.addEventListener('click', () => setMode('draw'));
   
   // 필기 모드 설정
-  el.drawColor.addEventListener('input', (e) => state.drawSettings.color = e.target.value);
+  const colorPresets = document.querySelectorAll('.btn-color-preset');
+  colorPresets.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const color = btn.getAttribute('data-color');
+      state.drawSettings.color = color;
+      el.drawColor.value = color;
+      
+      colorPresets.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+
+  el.drawColor.addEventListener('input', (e) => {
+    state.drawSettings.color = e.target.value;
+    colorPresets.forEach(b => {
+      if (b.getAttribute('data-color').toLowerCase() === e.target.value.toLowerCase()) {
+        b.classList.add('active');
+      } else {
+        b.classList.remove('active');
+      }
+    });
+  });
   el.drawWidth.addEventListener('input', (e) => state.drawSettings.width = parseInt(e.target.value));
   
   const handleDrawPen = (e) => {

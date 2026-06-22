@@ -877,6 +877,26 @@ input:checked + .slider:before {
   border-color: #ef4444;
 }
 
+/* Color Presets */
+.btn-color-preset {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid rgba(128, 128, 128, 0.5);
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+  padding: 0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.btn-color-preset:hover {
+  transform: scale(1.15);
+}
+.btn-color-preset.active {
+  border-color: var(--accent-color);
+  transform: scale(1.2);
+  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-color);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   #sidebar {
