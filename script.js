@@ -1926,7 +1926,20 @@ function render() {
     circle.setAttribute('cy', '0');
     circle.setAttribute('r', '8');
     circle.setAttribute('data-marriage-id', m.id);
+    circle.setAttribute('pointer-events', 'all');
     
+    // 모바일/패드에서 터치를 쉽게 하기 위한 투명한 확장 히트박스
+    const hitbox = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    hitbox.setAttribute('cx', '0');
+    hitbox.setAttribute('cy', '0');
+    hitbox.setAttribute('r', '24'); // 반경 24px (터치 영역 확보)
+    hitbox.style.fill = 'transparent';
+    hitbox.style.stroke = 'none';
+    hitbox.setAttribute('pointer-events', 'all');
+    hitbox.setAttribute('data-marriage-id', m.id);
+    hitbox.style.cursor = 'grab';
+    
+    marryNode.appendChild(hitbox);
     marryNode.appendChild(circle);
     el.linesGroup.appendChild(marryNode);
   });
