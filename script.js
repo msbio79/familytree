@@ -824,12 +824,19 @@ function onPointerDown(e) {
       state.pointerCache = [];
     }
     
-    // 멀티터치를 위해 포인터 등록 (중복 방지)
+    // 멀티터치를 위해 포인터 등록 (중복 방지, Safari 이벤트 객체 재사용 버그 방지를 위해 복사본 저장)
+    const cachedPointer = {
+      pointerId: e.pointerId,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      pointerType: e.pointerType
+    };
+    
     const existingIndex = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
     if (existingIndex !== -1) {
-      state.pointerCache[existingIndex] = e;
+      state.pointerCache[existingIndex] = cachedPointer;
     } else {
-      state.pointerCache.push(e);
+      state.pointerCache.push(cachedPointer);
     }
   }
 
@@ -1002,15 +1009,26 @@ function onPointerDown(e) {
 }
 
 function onPointerMove(e) {
-  // 포인터 캐시 갱신
+  // 포인터 캐시 갱신 (Safari 이벤트 객체 재사용 버그 방지를 위해 복사본 저장)
   const index = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
   if (index !== -1) {
-    state.pointerCache[index] = e;
+    state.pointerCache[index] = {
+      pointerId: e.pointerId,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      pointerType: e.pointerType
+    };
   }
   
   // 마우스인데 캐시 개수가 비정상인 경우 강제 리셋
   if (e.pointerType === 'mouse' && state.pointerCache.length !== 1) {
     state.pointerCache = [e];
+  }
+  
+  if (state.pointerCache.length !== 2) {
+    state.initialPinchDistance = null;
+    state.initialScale = null;
+    state.initialCanvasCenter = null;
   }
   
   // [팜 리젝션 및 획 끊김 방지 최적화]
@@ -1117,32 +1135,40 @@ function onPointerMove(e) {
       render();
     } else if (state.isPanning) {
       // 캔버스 드래그 이동
-      state.panX = e.clientX - state.panStart.x;
-      state.panY = e.clientY - state.panStart.y;
+      if (state.panStartOffset) {
+        state.panX = state.panStartOffset.x + (e.clientX - state.panStart.x);
+        state.panY = state.panStartOffset.y + (e.clientY - state.panStart.y);
+      } else {
+        state.panX = e.clientX - state.panStart.x;
+        state.panY = e.clientY - state.panStart.y;
+      }
       applyTransform();
     }
   } else if (state.pointerCache.length === 2) {
-    // 핀치 줌 및 두 손가락 화면 이동(Pan) 제어
+    // 핀치 줌 및 두 손가락 화면 이동(Pan) 제어 - 절대 좌표 수식 적용 (흔들림 완벽 차단)
+    const rect = el.canvasContainer.getBoundingClientRect();
     const curDiff = getDistance(state.pointerCache[0], state.pointerCache[1]);
-    const centerX = (state.pointerCache[0].clientX + state.pointerCache[1].clientX) / 2;
-    const centerY = (state.pointerCache[0].clientY + state.pointerCache[1].clientY) / 2;
+    const centerX = (state.pointerCache[0].clientX + state.pointerCache[1].clientX) / 2 - rect.left;
+    const centerY = (state.pointerCache[0].clientY + state.pointerCache[1].clientY) / 2 - rect.top;
     
-    if (state.prevDiff > 0) {
-      // 1. 두 손가락 중심점 이동량(Pan)을 먼저 적용합니다.
-      if (state.prevPinchCenter) {
-        const dx = centerX - state.prevPinchCenter.x;
-        const dy = centerY - state.prevPinchCenter.y;
-        state.panX += dx;
-        state.panY += dy;
-      }
+    if (!state.initialPinchDistance) {
+      state.initialPinchDistance = curDiff;
+      state.initialScale = state.scale;
+      state.initialCanvasCenter = {
+        x: (centerX - state.panX) / state.scale,
+        y: (centerY - state.panY) / state.scale
+      };
+    } else if (state.initialPinchDistance > 0) {
+      const zoomFactor = curDiff / state.initialPinchDistance;
+      let newScale = state.initialScale * zoomFactor;
+      newScale = Math.max(0.2, Math.min(4.0, newScale));
       
-      // 2. 그 다음, 새로운 중심점을 기준으로 확대/축소를 적용합니다.
-      const zoomFactor = curDiff / state.prevDiff;
-      zoomAroundPoint(zoomFactor, centerX, centerY);
+      state.scale = newScale;
+      state.panX = centerX - state.initialCanvasCenter.x * newScale;
+      state.panY = centerY - state.initialCanvasCenter.y * newScale;
+      
+      applyTransform();
     }
-    
-    state.prevDiff = curDiff;
-    state.prevPinchCenter = { x: centerX, y: centerY };
   }
 }
 
@@ -1170,6 +1196,19 @@ function onPointerUp(e) {
     }
     // 필기 모드일 때는 화면 갱신이나 노드 드래그 종료를 처리할 필요 없음
     if (state.pointerCache.length === 0) return;
+  }
+  
+  if (state.pointerCache.length !== 2) {
+    state.initialPinchDistance = null;
+    state.initialScale = null;
+    state.initialCanvasCenter = null;
+  }
+  
+  // 핀치 줌이 끝나고 손가락이 하나만 남았을 때, 캔버스가 예전 좌표로 튀는 것을 방지
+  if (state.pointerCache.length === 1 && state.isPanning) {
+    const p = state.pointerCache[0];
+    state.panStart = { x: p.clientX, y: p.clientY };
+    state.panStartOffset = { x: state.panX, y: state.panY };
   }
   
   if (state.pointerCache.length < 2) {
