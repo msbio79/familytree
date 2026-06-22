@@ -1674,7 +1674,6 @@ function startTouchNodeDrag(nodeId, touch) {
     state.nodeDragStarted = false;
     
     showDetailPanel(node);
-    render();
   } else if (state.mode === 'marry') {
     if (!state.marryFirstNodeId) {
       state.marryFirstNodeId = nodeId;
@@ -1712,7 +1711,6 @@ function startTouchMarriageDrag(marriageId, touch) {
       state.marriageClickTime = Date.now();
       state.marriageClickId = marriageId;
       state.marriageDragStarted = false;
-      render();
     }
   } else {
     addChildToMarriage(marriageId);
@@ -1735,7 +1733,6 @@ function startTouchFamilyDrag(familyMarriageId, touch) {
     state.marriageDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
     state.marriageClickId = null;
     state.marriageDragStarted = false;
-    render();
   }
 }
 
@@ -2262,6 +2259,10 @@ function showMarriageDetail(marriage) {
 }
 
 function deselectAll() {
+  if (state.selectedNodeId === null && state.selectedMarriageId === null) {
+    el.detailPanel.classList.remove('visible');
+    return;
+  }
   state.selectedNodeId = null;
   state.selectedMarriageId = null;
   el.detailPanel.classList.remove('visible');
