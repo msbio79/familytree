@@ -67,7 +67,11 @@ const state = {
   prevPinchCenter: null,
   
   // 빈칸 플레이스홀더 제어
-  activePlaceholderTargetId: null
+  activePlaceholderTargetId: null,
+  
+  // 멀티터치 제스처 시 원래 선택 상태 복원을 위한 임시 변수
+  prevSelectedNodeId: undefined,
+  prevSelectedMarriageId: undefined
 };
 
 // --- 2. HTML 엘리먼트 참조 ---
@@ -662,6 +666,10 @@ function setupEventListeners() {
       state.initialScale = null;
       state.initialCanvasCenter = null;
     }
+    if (state.pointerCache.length === 0) {
+      state.prevSelectedNodeId = undefined;
+      state.prevSelectedMarriageId = undefined;
+    }
   };
   window.addEventListener('pointerup', cleanPointerFromCache);
   window.addEventListener('pointercancel', cleanPointerFromCache);
@@ -939,6 +947,8 @@ function onPointerDown(e) {
   
   if (state.pointerCache.length === 1) {
     // 단일 터치/클릭 (필기 드로잉 처리부는 상단 고속 인터셉터로 이동됨)
+    state.prevSelectedNodeId = state.selectedNodeId;
+    state.prevSelectedMarriageId = state.selectedMarriageId;
     
     if (nodeId) {
       const now = Date.now();
@@ -1035,6 +1045,26 @@ function onPointerDown(e) {
     state.draggedFamilyOriginals = null;
     state.nodeDragStarted = false;
     state.marriageDragStarted = false;
+    
+    // 두 손가락 터치가 시작되면, 첫 번째 손가락 터치 때 임시 변경되었던 선택 상태 복구
+    if (state.prevSelectedNodeId !== undefined || state.prevSelectedMarriageId !== undefined) {
+      state.selectedNodeId = state.prevSelectedNodeId || null;
+      state.selectedMarriageId = state.prevSelectedMarriageId || null;
+      state.prevSelectedNodeId = undefined;
+      state.prevSelectedMarriageId = undefined;
+      
+      if (state.selectedNodeId) {
+        const node = findNode(state.selectedNodeId);
+        if (node) showDetailPanel(node);
+        else deselectAll();
+      } else if (state.selectedMarriageId) {
+        const marriage = findMarriage(state.selectedMarriageId);
+        if (marriage) showMarriageDetail(marriage);
+        else deselectAll();
+      } else {
+        deselectAll();
+      }
+    }
     
     // 두 터치 지점 거리 계산
     state.prevDiff = getDistance(state.pointerCache[0], state.pointerCache[1]);
@@ -1314,6 +1344,11 @@ function onPointerUp(e) {
   state.marriageDragStartCoords = null;
   state.nodeDragStartCoords = null;
   state.isPanning = false;
+  
+  // 성공적으로 단일 터치 제스처가 끝났으므로 백업된 선택 정보 초기화
+  state.prevSelectedNodeId = undefined;
+  state.prevSelectedMarriageId = undefined;
+  
   render();
 }
 
