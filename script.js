@@ -657,6 +657,11 @@ function setupEventListeners() {
     if (state.pointerCache.length < 2) {
       state.prevDiff = -1;
     }
+    if (state.pointerCache.length !== 2) {
+      state.initialPinchDistance = null;
+      state.initialScale = null;
+      state.initialCanvasCenter = null;
+    }
   };
   window.addEventListener('pointerup', cleanPointerFromCache);
   window.addEventListener('pointercancel', cleanPointerFromCache);
@@ -1034,6 +1039,11 @@ function onPointerDown(e) {
     // 두 터치 지점 거리 계산
     state.prevDiff = getDistance(state.pointerCache[0], state.pointerCache[1]);
     
+    // 핀치 줌 시작 정보 초기화 (중요: 여기서 명시적으로 초기화해야 함)
+    state.initialPinchDistance = null;
+    state.initialScale = null;
+    state.initialCanvasCenter = null;
+    
     render(); // 복구된 위치 렌더링
   }
 }
@@ -1177,18 +1187,24 @@ function onPointerMove(e) {
   } else if (state.pointerCache.length === 2) {
     // 핀치 줌 및 두 손가락 화면 이동(Pan) 제어 - 절대 좌표 수식 적용 (흔들림 완벽 차단)
     const rect = el.canvasContainer.getBoundingClientRect();
-    const curDiff = getDistance(state.pointerCache[0], state.pointerCache[1]);
-    const centerX = (state.pointerCache[0].clientX + state.pointerCache[1].clientX) / 2 - rect.left;
-    const centerY = (state.pointerCache[0].clientY + state.pointerCache[1].clientY) / 2 - rect.top;
+    if (!rect) return;
     
-    if (!state.initialPinchDistance) {
-      state.initialPinchDistance = curDiff;
-      state.initialScale = state.scale;
+    const p1 = state.pointerCache[0];
+    const p2 = state.pointerCache[1];
+    if (!p1 || !p2 || p1.clientX === undefined || p2.clientX === undefined) return;
+    
+    const curDiff = getDistance(p1, p2);
+    const centerX = (p1.clientX + p2.clientX) / 2 - rect.left;
+    const centerY = (p1.clientY + p2.clientY) / 2 - rect.top;
+    
+    if (!state.initialPinchDistance || !state.initialCanvasCenter || state.initialPinchDistance <= 0) {
+      state.initialPinchDistance = curDiff > 0 ? curDiff : 1;
+      state.initialScale = state.scale || 1.0;
       state.initialCanvasCenter = {
-        x: (centerX - state.panX) / state.scale,
-        y: (centerY - state.panY) / state.scale
+        x: (centerX - state.panX) / (state.scale || 1.0),
+        y: (centerY - state.panY) / (state.scale || 1.0)
       };
-    } else if (state.initialPinchDistance > 0) {
+    } else {
       const zoomFactor = curDiff / state.initialPinchDistance;
       let newScale = state.initialScale * zoomFactor;
       newScale = Math.max(0.2, Math.min(4.0, newScale));
@@ -1343,6 +1359,13 @@ function syncPointerCacheWithTouches(e) {
       }
       state.prevDiff = -1;
     }
+    
+    // 만약 터치 동기화 결과 포인터 수가 2개가 아니게 되었다면, 핀치 줌 상태를 명시적으로 리셋
+    if (state.pointerCache.length !== 2) {
+      state.initialPinchDistance = null;
+      state.initialScale = null;
+      state.initialCanvasCenter = null;
+    }
   }
 }
 
@@ -1361,6 +1384,10 @@ function screenToCanvas(screenX, screenY) {
 
 // 캔버스 카메라 변환 적용
 function applyTransform() {
+  if (isNaN(state.panX) || !isFinite(state.panX)) state.panX = 0;
+  if (isNaN(state.panY) || !isFinite(state.panY)) state.panY = 0;
+  if (isNaN(state.scale) || !isFinite(state.scale) || state.scale <= 0) state.scale = 1.0;
+  
   el.viewportGroup.setAttribute('transform', `translate(${state.panX}, ${state.panY}) scale(${state.scale})`);
   el.htmlOverlayLayer.style.transform = `translate(${state.panX}px, ${state.panY}px) scale(${state.scale})`;
 }
@@ -1412,11 +1439,13 @@ function fitToScreen() {
   const width = maxX - minX + 160;
   const height = maxY - minY + 160;
   
-  const containerW = el.canvasContainer.clientWidth;
-  const containerH = el.canvasContainer.clientHeight;
+  const containerW = el.canvasContainer.clientWidth || 800;
+  const containerH = el.canvasContainer.clientHeight || 600;
   
   // 개체가 더 크게 보이도록 scale 범위와 배율 조정 (x1.3)
   state.scale = Math.max(0.8, Math.min(2.0, Math.min(containerW / width, containerH / height) * 1.3));
+  if (isNaN(state.scale) || !isFinite(state.scale)) state.scale = 1.0;
+  
   state.panX = containerW / 2 - (minX + maxX) / 2 * state.scale;
   state.panY = containerH / 2 - (minY + maxY) / 2 * state.scale;
   
