@@ -1007,10 +1007,34 @@ function onPointerDown(e) {
   } else if (state.pointerCache.length === 2) {
     // 두 손가락 터치 -> Pinch 줌 시작
     state.isPanning = false;
+    
+    // 만약 첫 번째 손가락이 개체나 가족을 드래그 중이었다면 원위치로 복구 (확대 축소 시 오작동 방지)
+    if (state.draggedNode && state.draggedNodeOriginal) {
+      state.draggedNode.x = state.draggedNodeOriginal.x;
+      state.draggedNode.y = state.draggedNodeOriginal.y;
+    }
+    if (state.draggedFamilyNodes && state.draggedFamilyOriginals) {
+      state.draggedFamilyNodes.forEach(n => {
+        const orig = state.draggedFamilyOriginals.find(o => o.id === n.id);
+        if (orig) {
+          n.x = orig.x;
+          n.y = orig.y;
+        }
+      });
+    }
+    
+    // 드래그 상태 완벽 초기화
     state.draggedNode = null;
+    state.draggedNodeOriginal = null;
+    state.draggedFamilyNodes = null;
+    state.draggedFamilyOriginals = null;
+    state.nodeDragStarted = false;
+    state.marriageDragStarted = false;
     
     // 두 터치 지점 거리 계산
     state.prevDiff = getDistance(state.pointerCache[0], state.pointerCache[1]);
+    
+    render(); // 복구된 위치 렌더링
   }
 }
 
@@ -1179,6 +1203,12 @@ function onPointerMove(e) {
 }
 
 function onPointerUp(e) {
+  const target = e.target;
+  // 유전자형 select 등 폼 요소 클릭 시 캔버스 렌더링(DOM 파괴) 방지
+  if (target && target.tagName && (target.tagName.toLowerCase() === 'select' || target.tagName.toLowerCase() === 'option' || target.closest('foreignObject'))) {
+    return;
+  }
+
   // 필기 모드가 아닐 때만 캡처 해제 처리 (캡처 설정 자체가 제외되었으므로)
   if (state.mode !== 'draw') {
     try {
@@ -1409,6 +1439,7 @@ function handleNodeClick(nodeId, e) {
     state.dragOffset.x = canvasCoords.x - node.x;
     state.dragOffset.y = canvasCoords.y - node.y;
     state.nodeDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
+    state.draggedNodeOriginal = { x: node.x, y: node.y };
     state.nodeDragStarted = false; // 아직 실제 5px 움직이지 않음
     
     showDetailPanel(node);
