@@ -704,6 +704,12 @@ input:checked + .slider:before {
   stroke: var(--node-selected-stroke);
 }
 
+.marriage-node.dragging circle:last-child {
+  fill: #3b82f6 !important;
+  stroke: #1d4ed8 !important;
+  transform: scale(1) !important;
+}
+
 /* Trashbin/Delete Area on SVG */
 .delete-drop-zone {
   position: absolute;
