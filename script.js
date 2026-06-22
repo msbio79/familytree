@@ -640,20 +640,17 @@ function setupEventListeners() {
   window.addEventListener('pointerup', onPointerUp, { passive: false });
   window.addEventListener('pointercancel', onPointerUp, { passive: false });
 
-  // Safari <select> 버그(pointerup 누락)에 의한 고스트 터치 완벽 해결을 위해 실제 터치 수와 동기화
-  window.addEventListener('touchstart', (e) => {
-    if (e.touches && state.pointerCache.length > e.touches.length) {
-      // 실제 물리적 터치 개수보다 캐시에 포인터가 많으면, 고스트 터치가 남아있는 것이므로 전부 초기화
-      state.pointerCache = [];
-      state.initialPinchDistance = null;
-      state.initialScale = null;
-      state.initialCanvasCenter = null;
-    }
-  }, { passive: true });
+  // 모바일 터치 이벤트 바인딩 (사파리 포인터 이벤트 버그 회피 및 완벽한 확대축소 구현)
+  el.svg.addEventListener('touchstart', onTouchStart, { passive: false });
+  el.svg.addEventListener('touchmove', onTouchMove, { passive: false });
+  window.addEventListener('touchend', onTouchEnd, { passive: false });
+  window.addEventListener('touchcancel', onTouchEnd, { passive: false });
+
   el.svg.addEventListener('wheel', onWheel, { passive: false });
   
   // 윈도우 레벨에서 포인터 해제/취소를 추가 감시하여 좀비 포인터 누적 방지
   const cleanPointerFromCache = (e) => {
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
     const index = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
     if (index !== -1) {
       state.pointerCache.splice(index, 1);
@@ -690,12 +687,6 @@ function setupEventListeners() {
     }
     e.preventDefault();
   }, { passive: false });
-  
-  // 터치 기기용 실제 터치 상태 강제 동기화 (아이패드 등 터치 꼬임 해결의 핵심)
-  window.addEventListener('touchstart', syncPointerCacheWithTouches, { passive: true });
-  window.addEventListener('touchmove', syncPointerCacheWithTouches, { passive: true });
-  window.addEventListener('touchend', syncPointerCacheWithTouches, { passive: true });
-  window.addEventListener('touchcancel', syncPointerCacheWithTouches, { passive: true });
   
   // 범례 클릭 이벤트 바인딩
   document.querySelectorAll('.legend-draggable').forEach(item => {
@@ -833,6 +824,7 @@ function eraseAtPointer(x, y) {
 }
 
 function onPointerDown(e) {
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
   const target = e.target;
   // 유전자형 select 클릭 시 드래그 및 이벤트 막기
   if (target.tagName.toLowerCase() === 'select' || target.tagName.toLowerCase() === 'option' || target.closest('foreignObject')) {
@@ -1079,6 +1071,7 @@ function onPointerDown(e) {
 }
 
 function onPointerMove(e) {
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
   // 포인터 캐시 갱신 (Safari 이벤트 객체 재사용 버그 방지를 위해 복사본 저장)
   const index = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
   if (index !== -1) {
@@ -1249,6 +1242,7 @@ function onPointerMove(e) {
 }
 
 function onPointerUp(e) {
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') return;
   const target = e.target;
   // 유전자형 select 등 폼 요소 클릭 시 캔버스 렌더링(DOM 파괴) 방지
   if (target && target.tagName && (target.tagName.toLowerCase() === 'select' || target.tagName.toLowerCase() === 'option' || target.closest('foreignObject'))) {
@@ -1350,6 +1344,443 @@ function onPointerUp(e) {
   state.prevSelectedMarriageId = undefined;
   
   render();
+}
+
+// --- 9-A. 전용 모바일 터치 이벤트 핸들러 (iPad/태블릿 완벽 지원) ---
+function onTouchStart(e) {
+  const target = e.target;
+  if (target.tagName.toLowerCase() === 'select' || target.tagName.toLowerCase() === 'option' || target.closest('foreignObject')) {
+    return;
+  }
+  e.preventDefault();
+  
+  if (e.touches.length === 1) {
+    const touch = e.touches[0];
+    
+    if (state.mode === 'draw') {
+      startTouchDrawing(touch);
+      return;
+    }
+    
+    state.prevSelectedNodeId = state.selectedNodeId;
+    state.prevSelectedMarriageId = state.selectedMarriageId;
+    
+    const nodeGroup = target.closest('.pedigree-node');
+    const nodeId = nodeGroup ? nodeGroup.getAttribute('data-node-id') : null;
+    
+    const marriageGroup = target.closest('.marriage-node');
+    const marriageId = marriageGroup ? marriageGroup.getAttribute('data-marriage-id') : null;
+    
+    const connectionLine = target.closest('.pedigree-connection-line');
+    const familyMarriageId = connectionLine ? connectionLine.getAttribute('data-family-marriage-id') : null;
+    
+    if (nodeId) {
+      const now = Date.now();
+      if (state.mode === 'select' && state.lastClickedNodeId === nodeId && now - (state.lastNodeClickTime || 0) < 300) {
+        state.selectedNodeId = nodeId;
+        deleteSelected();
+        state.lastClickedNodeId = null;
+        return;
+      }
+      state.lastClickedNodeId = nodeId;
+      state.lastNodeClickTime = now;
+      
+      const node = findNode(nodeId);
+      if (node && node.isPlaceholder) {
+        if (state.mode === 'select') {
+          state.selectedNodeId = nodeId;
+          state.selectedMarriageId = null;
+          showDetailPanel(node);
+          render();
+        }
+        return;
+      }
+      
+      startTouchNodeDrag(nodeId, touch);
+    } else if (marriageId) {
+      startTouchMarriageDrag(marriageId, touch);
+    } else if (familyMarriageId && state.mode === 'select') {
+      startTouchFamilyDrag(familyMarriageId, touch);
+    } else {
+      state.isPanning = true;
+      state.panStart = { x: touch.clientX, y: touch.clientY };
+      state.panStartOffset = { x: state.panX, y: state.panY };
+      
+      if (state.mode === 'select') {
+        deselectAll();
+      }
+    }
+  } else if (e.touches.length === 2) {
+    if (state.mode === 'draw') {
+      cancelTouchDrawing();
+    }
+    restorePrevTouchSelection();
+    cancelTouchDragging();
+    
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    const rect = el.canvasContainer.getBoundingClientRect();
+    if (!rect) return;
+    
+    const curDiff = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    const centerX = (t1.clientX + t2.clientX) / 2 - rect.left;
+    const centerY = (t1.clientY + t2.clientY) / 2 - rect.top;
+    
+    state.initialPinchDistance = curDiff > 0 ? curDiff : 1;
+    state.initialScale = state.scale || 1.0;
+    state.initialCanvasCenter = {
+      x: (centerX - state.panX) / (state.scale || 1.0),
+      y: (centerY - state.panY) / (state.scale || 1.0)
+    };
+    
+    state.isPanning = false;
+  }
+}
+
+function onTouchMove(e) {
+  e.preventDefault();
+  
+  if (e.touches.length === 1) {
+    const touch = e.touches[0];
+    
+    if (state.mode === 'draw' && state.currentPath) {
+      const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
+      state.currentPathD += ` L ${canvasCoords.x} ${canvasCoords.y}`;
+      state.currentPath.setAttribute('d', state.currentPathD);
+      return;
+    } else if (state.mode === 'draw' && state.isErasing) {
+      eraseAtPointer(touch.clientX, touch.clientY);
+      return;
+    }
+    
+    if (state.draggedNode) {
+      const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
+      const targetX = canvasCoords.x - state.dragOffset.x;
+      const targetY = canvasCoords.y - state.dragOffset.y;
+      
+      if (state.nodeDragStartCoords) {
+        const totalDx = canvasCoords.x - state.nodeDragStartCoords.x;
+        const totalDy = canvasCoords.y - state.nodeDragStartCoords.y;
+        if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
+          state.nodeDragStarted = true;
+          state.draggedNode.manualMoved = true;
+        }
+      } else {
+        state.nodeDragStarted = true;
+        state.draggedNode.manualMoved = true;
+      }
+      
+      if (state.nodeDragStarted) {
+        state.draggedNode.x = Math.max(-2000, Math.min(2000, targetX));
+        state.draggedNode.y = Math.max(-2000, Math.min(2000, targetY));
+        
+        let closestPlaceholder = null;
+        let minDist = 60;
+        state.nodes.forEach(n => {
+          if (n.isPlaceholder && n.gender === state.draggedNode.gender) {
+            const dist = Math.sqrt(Math.pow(state.draggedNode.x - n.x, 2) + Math.pow(state.draggedNode.y - n.y, 2));
+            if (dist < minDist) {
+              minDist = dist;
+              closestPlaceholder = n;
+            }
+          }
+        });
+        state.activePlaceholderTargetId = closestPlaceholder ? closestPlaceholder.id : null;
+        render();
+      }
+    } else if (state.draggedFamilyNodes) {
+      const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
+      let totalDx = 0;
+      let totalDy = 0;
+      if (state.marriageDragStartCoords) {
+        totalDx = canvasCoords.x - state.marriageDragStartCoords.x;
+        totalDy = canvasCoords.y - state.marriageDragStartCoords.y;
+        if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
+          state.marriageDragStarted = true;
+        }
+      }
+      
+      if (state.draggedFamilyOriginals) {
+        state.draggedFamilyNodes.forEach(n => {
+          const orig = state.draggedFamilyOriginals.find(o => o.id === n.id);
+          if (orig) {
+            n.x = orig.x + totalDx;
+            n.y = orig.y + totalDy;
+          }
+        });
+      }
+      render();
+    } else if (state.isPanning) {
+      state.panX = state.panStartOffset.x + (touch.clientX - state.panStart.x);
+      state.panY = state.panStartOffset.y + (touch.clientY - state.panStart.y);
+      applyTransform();
+    }
+  } else if (e.touches.length === 2) {
+    const t1 = e.touches[0];
+    const t2 = e.touches[1];
+    const rect = el.canvasContainer.getBoundingClientRect();
+    if (!rect) return;
+    
+    const curDiff = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+    const centerX = (t1.clientX + t2.clientX) / 2 - rect.left;
+    const centerY = (t1.clientY + t2.clientY) / 2 - rect.top;
+    
+    if (!state.initialPinchDistance || state.initialPinchDistance <= 0 || !state.initialCanvasCenter) {
+      state.initialPinchDistance = curDiff > 0 ? curDiff : 1;
+      state.initialScale = state.scale || 1.0;
+      state.initialCanvasCenter = {
+        x: (centerX - state.panX) / (state.scale || 1.0),
+        y: (centerY - state.panY) / (state.scale || 1.0)
+      };
+    } else {
+      const zoomFactor = curDiff / state.initialPinchDistance;
+      let newScale = state.initialScale * zoomFactor;
+      newScale = Math.max(0.2, Math.min(4.0, newScale));
+      
+      state.scale = newScale;
+      state.panX = centerX - state.initialCanvasCenter.x * newScale;
+      state.panY = centerY - state.initialCanvasCenter.y * newScale;
+      
+      applyTransform();
+    }
+  }
+}
+
+function onTouchEnd(e) {
+  const target = e.target;
+  if (target && target.tagName && (target.tagName.toLowerCase() === 'select' || target.tagName.toLowerCase() === 'option' || target.closest('foreignObject'))) {
+    return;
+  }
+  e.preventDefault();
+  
+  if (state.mode === 'draw') {
+    state.currentPath = null;
+    state.currentPathD = "";
+    state.isErasing = false;
+    return;
+  }
+  
+  if (e.touches.length === 0) {
+    if (state.draggedNode && state.nodeDragStarted) {
+      if (state.activePlaceholderTargetId) {
+        fillPlaceholder(state.draggedNode.id, state.activePlaceholderTargetId);
+        state.activePlaceholderTargetId = null;
+      } else {
+        let snapY = null;
+        let minDeltaY = 50;
+        state.nodes.forEach(n => {
+          if (n.id !== state.draggedNode.id && !n.isPlaceholder) {
+            const deltaY = Math.abs(state.draggedNode.y - n.y);
+            if (deltaY < minDeltaY) {
+              minDeltaY = deltaY;
+              snapY = n.y;
+            }
+          }
+        });
+        if (snapY !== null) {
+          state.draggedNode.y = snapY;
+        } else {
+          state.draggedNode.y = Math.round(state.draggedNode.y / 40) * 40;
+        }
+        state.draggedNode.x = Math.round(state.draggedNode.x / 40) * 40;
+      }
+    }
+    
+    if (state.draggedFamilyNodes && state.marriageClickId && !state.marriageDragStarted) {
+      const now = Date.now();
+      if (now - state.marriageClickTime < 500) {
+        addChildToMarriage(state.marriageClickId);
+        showToast("자녀가 추가되었습니다.");
+        state.selectedMarriageId = state.marriageClickId;
+        state.selectedNodeId = null;
+        const marriage = findMarriage(state.marriageClickId);
+        if (marriage) showMarriageDetail(marriage);
+      }
+    }
+    
+    state.draggedNode = null;
+    state.nodeDragStarted = false;
+    state.draggedFamilyNodes = null;
+    state.draggedFamilyOriginals = null;
+    state.marriageClickId = null;
+    state.marriageDragStartCoords = null;
+    state.nodeDragStartCoords = null;
+    state.isPanning = false;
+    
+    state.prevSelectedNodeId = undefined;
+    state.prevSelectedMarriageId = undefined;
+    
+    state.initialPinchDistance = null;
+    state.initialScale = null;
+    state.initialCanvasCenter = null;
+    
+    render();
+  } else if (e.touches.length === 1) {
+    const touch = e.touches[0];
+    state.isPanning = true;
+    state.panStart = { x: touch.clientX, y: touch.clientY };
+    state.panStartOffset = { x: state.panX, y: state.panY };
+    
+    state.initialPinchDistance = null;
+    state.initialScale = null;
+    state.initialCanvasCenter = null;
+  }
+}
+
+function startTouchDrawing(touch) {
+  const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
+  if (state.drawSettings.tool === 'pen') {
+    state.currentPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    state.currentPath.setAttribute('fill', 'none');
+    state.currentPath.setAttribute('stroke', state.drawSettings.color);
+    state.currentPath.setAttribute('stroke-width', state.drawSettings.width);
+    state.currentPath.setAttribute('stroke-linecap', 'round');
+    state.currentPath.setAttribute('stroke-linejoin', 'round');
+    
+    state.currentPathD = `M ${canvasCoords.x} ${canvasCoords.y}`;
+    state.currentPath.setAttribute('d', state.currentPathD);
+    state.currentPath.setAttribute('pointer-events', 'stroke');
+    el.drawLayer.appendChild(state.currentPath);
+  } else if (state.drawSettings.tool === 'eraser') {
+    state.isErasing = true;
+    eraseAtPointer(touch.clientX, touch.clientY);
+  }
+}
+
+function cancelTouchDrawing() {
+  if (state.currentPath) {
+    state.currentPath.remove();
+    state.currentPath = null;
+  }
+  state.currentPathD = "";
+  state.isErasing = false;
+}
+
+function startTouchNodeDrag(nodeId, touch) {
+  const node = findNode(nodeId);
+  if (!node) return;
+  
+  if (state.mode === 'select') {
+    state.selectedNodeId = nodeId;
+    state.selectedMarriageId = null;
+    
+    state.draggedNode = node;
+    const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
+    state.dragOffset = {
+      x: canvasCoords.x - node.x,
+      y: canvasCoords.y - node.y
+    };
+    state.nodeDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
+    state.draggedNodeOriginal = { x: node.x, y: node.y };
+    state.nodeDragStarted = false;
+    
+    showDetailPanel(node);
+    render();
+  } else if (state.mode === 'marry') {
+    if (!state.marryFirstNodeId) {
+      state.marryFirstNodeId = nodeId;
+      showToast("배우자(반대 성별)를 터치하여 결혼선을 연결하세요.");
+      render();
+    } else {
+      const firstNode = findNode(state.marryFirstNodeId);
+      if (state.marryFirstNodeId === nodeId) {
+        state.marryFirstNodeId = null;
+        showToast("결혼 연결이 취소되었습니다.");
+      } else if (firstNode.gender === node.gender) {
+        showToast("남성과 여성 사이에서만 부부 관계가 가능합니다.");
+        state.marryFirstNodeId = null;
+      } else {
+        createMarriage(state.marryFirstNodeId, nodeId);
+        showToast("부부 관계가 연결되었습니다.");
+        state.marryFirstNodeId = null;
+        setMode('select');
+      }
+      render();
+    }
+  }
+}
+
+function startTouchMarriageDrag(marriageId, touch) {
+  if (state.mode === 'select') {
+    const m = findMarriage(marriageId);
+    if (m) {
+      state.draggedFamilyNodes = getConnectedFamilyByNode(m.partner1Id);
+      state.draggedFamilyOriginals = state.draggedFamilyNodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
+      const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
+      state.dragOffset = { x: canvasCoords.x, y: canvasCoords.y };
+      state.marriageDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
+      
+      state.marriageClickTime = Date.now();
+      state.marriageClickId = marriageId;
+      state.marriageDragStarted = false;
+      render();
+    }
+  } else {
+    addChildToMarriage(marriageId);
+    showToast("자녀가 추가되었습니다.");
+    state.selectedMarriageId = marriageId;
+    state.selectedNodeId = null;
+    const m = findMarriage(marriageId);
+    if (m) showMarriageDetail(m);
+    render();
+  }
+}
+
+function startTouchFamilyDrag(familyMarriageId, touch) {
+  const m = findMarriage(familyMarriageId);
+  if (m) {
+    state.draggedFamilyNodes = getConnectedFamilyByNode(m.partner1Id);
+    state.draggedFamilyOriginals = state.draggedFamilyNodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
+    const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
+    state.dragOffset = { x: canvasCoords.x, y: canvasCoords.y };
+    state.marriageDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
+    state.marriageClickId = null;
+    state.marriageDragStarted = false;
+    render();
+  }
+}
+
+function restorePrevTouchSelection() {
+  if (state.prevSelectedNodeId !== undefined || state.prevSelectedMarriageId !== undefined) {
+    state.selectedNodeId = state.prevSelectedNodeId || null;
+    state.selectedMarriageId = state.prevSelectedMarriageId || null;
+    state.prevSelectedNodeId = undefined;
+    state.prevSelectedMarriageId = undefined;
+    
+    if (state.selectedNodeId) {
+      const node = findNode(state.selectedNodeId);
+      if (node) showDetailPanel(node);
+      else deselectAll();
+    } else if (state.selectedMarriageId) {
+      const marriage = findMarriage(state.selectedMarriageId);
+      if (marriage) showMarriageDetail(marriage);
+      else deselectAll();
+    } else {
+      deselectAll();
+    }
+  }
+}
+
+function cancelTouchDragging() {
+  if (state.draggedNode && state.draggedNodeOriginal) {
+    state.draggedNode.x = state.draggedNodeOriginal.x;
+    state.draggedNode.y = state.draggedNodeOriginal.y;
+  }
+  if (state.draggedFamilyNodes && state.draggedFamilyOriginals) {
+    state.draggedFamilyNodes.forEach(n => {
+      const orig = state.draggedFamilyOriginals.find(o => o.id === n.id);
+      if (orig) {
+        n.x = orig.x;
+        n.y = orig.y;
+      }
+    });
+  }
+  state.draggedNode = null;
+  state.draggedNodeOriginal = null;
+  state.draggedFamilyNodes = null;
+  state.draggedFamilyOriginals = null;
+  state.nodeDragStarted = false;
+  state.marriageDragStarted = false;
 }
 
 // 휠을 통한 포인터 중심 확대/축소
