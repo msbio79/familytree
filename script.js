@@ -952,13 +952,16 @@ function onPointerDown(e) {
         const m = findMarriage(marriageId);
         if (m) {
           state.draggedFamilyNodes = getConnectedFamilyByNode(m.partner1Id);
+          state.draggedFamilyOriginals = state.draggedFamilyNodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
           const canvasCoords = screenToCanvas(e.clientX, e.clientY);
-          state.dragOffset = { x: canvasCoords.x, y: canvasCoords.y };
+          state.dragOffset = { x: canvasCoords.x, y: canvasCoords.y }; // backward compat if needed
           state.marriageDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
           
           state.marriageClickTime = Date.now();
           state.marriageClickId = marriageId;
           state.marriageDragStarted = false;
+          
+          render(); // DOM 요소를 pointerdown 도중에 재생성하여 사파리 pointercancel 버그 방지
         }
       } else {
         handleMarriageClick(marriageId, e);
@@ -968,10 +971,14 @@ function onPointerDown(e) {
       const m = findMarriage(familyMarriageId);
       if (m) {
         state.draggedFamilyNodes = getConnectedFamilyByNode(m.partner1Id);
+        state.draggedFamilyOriginals = state.draggedFamilyNodes.map(n => ({ id: n.id, x: n.x, y: n.y }));
         const canvasCoords = screenToCanvas(e.clientX, e.clientY);
         state.dragOffset = { x: canvasCoords.x, y: canvasCoords.y };
         state.marriageDragStartCoords = { x: canvasCoords.x, y: canvasCoords.y };
         state.marriageClickId = null; // 선 드래그는 자녀 생성을 하지 않음
+        state.marriageDragStarted = false;
+        
+        render(); // 사파리 버그 방지
       }
     } else {
       // 4. 빈 배경 클릭 -> 캔버스 Pan 시작
@@ -1086,29 +1093,26 @@ function onPointerMove(e) {
       }
     } else if (state.draggedFamilyNodes) {
       const canvasCoords = screenToCanvas(e.clientX, e.clientY);
-      const dx = canvasCoords.x - state.dragOffset.x;
-      const dy = canvasCoords.y - state.dragOffset.y;
       
-      // 누적 이동 거리가 5px 이상이면 드래그로 간주
+      let totalDx = 0;
+      let totalDy = 0;
       if (state.marriageDragStartCoords) {
-        const totalDx = canvasCoords.x - state.marriageDragStartCoords.x;
-        const totalDy = canvasCoords.y - state.marriageDragStartCoords.y;
+        totalDx = canvasCoords.x - state.marriageDragStartCoords.x;
+        totalDy = canvasCoords.y - state.marriageDragStartCoords.y;
         if (Math.abs(totalDx) > 5 || Math.abs(totalDy) > 5) {
           state.marriageDragStarted = true;
         }
-      } else if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-        state.marriageDragStarted = true;
       }
       
-      state.draggedFamilyNodes.forEach(n => {
-        n.x += dx;
-        n.y += dy;
-        // 가족 전체 이동 시 개별 노드의 manualMoved(수동 배치 여부)는 변경하지 않음
-        // (그래야 나중에 자손을 추가할 때 자동 정렬이 유지됨)
-      });
-      
-      state.dragOffset.x = canvasCoords.x;
-      state.dragOffset.y = canvasCoords.y;
+      if (state.draggedFamilyOriginals) {
+        state.draggedFamilyNodes.forEach(n => {
+          const orig = state.draggedFamilyOriginals.find(o => o.id === n.id);
+          if (orig) {
+            n.x = orig.x + totalDx;
+            n.y = orig.y + totalDy;
+          }
+        });
+      }
       
       render();
     } else if (state.isPanning) {
@@ -1124,17 +1128,17 @@ function onPointerMove(e) {
     const centerY = (state.pointerCache[0].clientY + state.pointerCache[1].clientY) / 2;
     
     if (state.prevDiff > 0) {
-      const zoomFactor = curDiff / state.prevDiff;
-      zoomAroundPoint(zoomFactor, centerX, centerY);
-      
-      // 두 손가락 중심점 이동량(Pan) 적용 (필기 모드 등에서도 자유로운 이동 지원)
+      // 1. 두 손가락 중심점 이동량(Pan)을 먼저 적용합니다.
       if (state.prevPinchCenter) {
         const dx = centerX - state.prevPinchCenter.x;
         const dy = centerY - state.prevPinchCenter.y;
         state.panX += dx;
         state.panY += dy;
-        applyTransform();
       }
+      
+      // 2. 그 다음, 새로운 중심점을 기준으로 확대/축소를 적용합니다.
+      const zoomFactor = curDiff / state.prevDiff;
+      zoomAroundPoint(zoomFactor, centerX, centerY);
     }
     
     state.prevDiff = curDiff;
@@ -1214,6 +1218,7 @@ function onPointerUp(e) {
   state.draggedNode = null;
   state.nodeDragStarted = false;
   state.draggedFamilyNodes = null;
+  state.draggedFamilyOriginals = null;
   state.marriageClickId = null;
   state.marriageDragStartCoords = null;
   state.nodeDragStartCoords = null;
