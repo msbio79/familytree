@@ -1198,13 +1198,8 @@ function onPointerMove(e) {
       render();
     } else if (state.isPanning) {
       // 캔버스 드래그 이동
-      if (state.panStartOffset) {
-        state.panX = state.panStartOffset.x + (e.clientX - state.panStart.x);
-        state.panY = state.panStartOffset.y + (e.clientY - state.panStart.y);
-      } else {
-        state.panX = e.clientX - state.panStart.x;
-        state.panY = e.clientY - state.panStart.y;
-      }
+      state.panX = e.clientX - state.panStart.x;
+      state.panY = e.clientY - state.panStart.y;
       applyTransform();
     }
   } else if (state.pointerCache.length === 2) {
@@ -1283,8 +1278,10 @@ function onPointerUp(e) {
   // 핀치 줌이 끝나고 손가락이 하나만 남았을 때, 캔버스가 예전 좌표로 튀는 것을 방지
   if (state.pointerCache.length === 1 && state.isPanning) {
     const p = state.pointerCache[0];
-    state.panStart = { x: p.clientX, y: p.clientY };
-    state.panStartOffset = { x: state.panX, y: state.panY };
+    state.panStart = {
+      x: p.clientX - state.panX,
+      y: p.clientY - state.panY
+    };
   }
   
   if (state.pointerCache.length < 2) {
@@ -1403,8 +1400,10 @@ function onTouchStart(e) {
       startTouchFamilyDrag(familyMarriageId, touch);
     } else {
       state.isPanning = true;
-      state.panStart = { x: touch.clientX, y: touch.clientY };
-      state.panStartOffset = { x: state.panX, y: state.panY };
+      state.panStart = {
+        x: touch.clientX - state.panX,
+        y: touch.clientY - state.panY
+      };
       
       if (state.mode === 'select') {
         deselectAll();
@@ -1511,8 +1510,8 @@ function onTouchMove(e) {
       }
       render();
     } else if (state.isPanning) {
-      state.panX = state.panStartOffset.x + (touch.clientX - state.panStart.x);
-      state.panY = state.panStartOffset.y + (touch.clientY - state.panStart.y);
+      state.panX = touch.clientX - state.panStart.x;
+      state.panY = touch.clientY - state.panStart.y;
       applyTransform();
     }
   } else if (e.touches.length === 2) {
@@ -1617,8 +1616,10 @@ function onTouchEnd(e) {
   } else if (e.touches.length === 1) {
     const touch = e.touches[0];
     state.isPanning = true;
-    state.panStart = { x: touch.clientX, y: touch.clientY };
-    state.panStartOffset = { x: state.panX, y: state.panY };
+    state.panStart = {
+      x: touch.clientX - state.panX,
+      y: touch.clientY - state.panY
+    };
     
     state.initialPinchDistance = null;
     state.initialScale = null;
