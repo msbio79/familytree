@@ -136,6 +136,7 @@ const el = {
   deleteNodeBtn: document.getElementById('delete-node-btn'),
   
   // 범례 구성
+  trait1Legends: document.querySelectorAll('.trait-1-legend'),
   trait2Legends: document.querySelectorAll('.trait-2-legend'),
   traitBothLegends: document.querySelectorAll('.trait-both-legend'),
   
@@ -160,6 +161,7 @@ const el = {
 window.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   applyTheme();
+  updateLegendVisibility();
   fitToScreen();
 });
 
@@ -701,7 +703,36 @@ function toggleTrait2UI() {
 }
 
 function updateLegendVisibility() {
-  // 형질2/복합형질 범례는 이제 항상 표시됩니다.
+  const isAbo = state.settings.inheritanceMode === 'abo';
+  const traitCount = state.settings.traitCount;
+
+  let showTrait1 = false;
+  let showTrait2 = false;
+  let showBoth = false;
+
+  if (isAbo) {
+    if (traitCount === 2) {
+      showTrait1 = true;
+    }
+  } else {
+    if (traitCount === 1) {
+      showTrait1 = true;
+    } else if (traitCount === 2) {
+      showTrait1 = true;
+      showTrait2 = true;
+      showBoth = true;
+    }
+  }
+
+  el.trait1Legends.forEach(item => {
+    item.style.display = showTrait1 ? 'flex' : 'none';
+  });
+  el.trait2Legends.forEach(item => {
+    item.style.display = showTrait2 ? 'flex' : 'none';
+  });
+  el.traitBothLegends.forEach(item => {
+    item.style.display = showBoth ? 'flex' : 'none';
+  });
 }
 
 // --- 8. 작동 모드 설정 ---
