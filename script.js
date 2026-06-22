@@ -819,6 +819,11 @@ function onPointerDown(e) {
   if (e.pointerType === 'mouse') {
     state.pointerCache = [e];
   } else {
+    // 만약 첫번째 터치(primary)라면 이전 캐시 비우기 (iOS/iPadOS select 조작 시 발생하는 고스트 터치 완벽 해결)
+    if (e.isPrimary) {
+      state.pointerCache = [];
+    }
+    
     // 멀티터치를 위해 포인터 등록 (중복 방지)
     const existingIndex = state.pointerCache.findIndex(p => p.pointerId === e.pointerId);
     if (existingIndex !== -1) {
