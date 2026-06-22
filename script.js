@@ -1801,7 +1801,7 @@ function updateDetailPanelGenotypes() {
     el.nodeGenotypeSelect.value = '-- 선택 --';
     el.nodeGenotypeCustom.value = '';
   } else if (!options.includes(node.genotype)) {
-    el.nodeGenotypeSelect.selectedIndex = -1;
+    el.nodeGenotypeSelect.value = '-- 선택 --';
     el.nodeGenotypeCustom.value = node.genotype;
   } else {
     el.nodeGenotypeSelect.value = node.genotype;
