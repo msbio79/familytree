@@ -1170,7 +1170,7 @@ function onPointerMove(e) {
         
         state.activePlaceholderTargetId = closestPlaceholder ? closestPlaceholder.id : null;
         
-        render();
+        updateNodeDragDOM(state.draggedNode);
       }
     } else if (state.draggedFamilyNodes) {
       const canvasCoords = screenToCanvas(e.clientX, e.clientY);
@@ -1504,7 +1504,8 @@ function onTouchMove(e) {
           }
         });
         state.activePlaceholderTargetId = closestPlaceholder ? closestPlaceholder.id : null;
-        render();
+        
+        updateNodeDragDOM(state.draggedNode);
       }
     } else if (state.draggedFamilyNodes) {
       const canvasCoords = screenToCanvas(touch.clientX, touch.clientY);
@@ -2475,6 +2476,7 @@ function render() {
     dropLine.setAttribute('y2', anchorY);
     dropLine.setAttribute('class', 'pedigree-connection-line');
     dropLine.setAttribute('data-family-marriage-id', m.id);
+    dropLine.setAttribute('data-line-type', 'drop');
     dropLine.style.cursor = 'grab';
     el.linesGroup.appendChild(dropLine);
     
@@ -2490,6 +2492,8 @@ function render() {
       horLine.setAttribute('y2', anchorY);
       horLine.setAttribute('class', 'pedigree-connection-line');
       horLine.setAttribute('data-family-marriage-id', m.id);
+      horLine.setAttribute('data-child-node-id', c.id);
+      horLine.setAttribute('data-line-type', 'child-horizontal');
       horLine.style.cursor = 'grab';
       el.linesGroup.appendChild(horLine);
       
@@ -2501,6 +2505,8 @@ function render() {
       childLine.setAttribute('y2', childTopY);
       childLine.setAttribute('class', 'pedigree-connection-line');
       childLine.setAttribute('data-family-marriage-id', m.id);
+      childLine.setAttribute('data-child-node-id', c.id);
+      childLine.setAttribute('data-line-type', 'child-vertical');
       childLine.style.cursor = 'grab';
       el.linesGroup.appendChild(childLine);
     });
@@ -2522,6 +2528,7 @@ function render() {
     line.setAttribute('y2', p2.y);
     line.setAttribute('class', `pedigree-connection-line`);
     line.setAttribute('data-family-marriage-id', m.id);
+    line.setAttribute('data-line-type', 'couple');
     line.style.cursor = 'grab';
     if (isSelected) {
       line.setAttribute('stroke', 'var(--node-selected-stroke)');
@@ -2874,6 +2881,104 @@ function updateFamilyDragDOM(totalDx, totalDy) {
     lines.forEach(lineEl => {
       lineEl.setAttribute('transform', `translate(${totalDx}, ${totalDy})`);
     });
+  });
+}
+
+// 개별 노드 드래그 시 성능 최적화 및 터치 유실 방지를 위해 DOM 속성을 직접 변경하는 경량 함수
+function updateNodeDragDOM(node) {
+  if (!node) return;
+  
+  // 1. 노드 DOM group 위치 변경
+  const nodeEl = el.nodesGroup.querySelector(`[data-node-id="${node.id}"]`);
+  if (nodeEl) {
+    nodeEl.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+  }
+  
+  // 2. 유전자형 select 드롭다운 위치 변경
+  const selectEl = el.htmlOverlayLayer.querySelector(`select[data-node-id="${node.id}"]`);
+  if (selectEl) {
+    selectEl.style.left = `${node.x - 60}px`;
+    selectEl.style.top = `${node.y - 65}px`;
+  }
+  
+  // 3. 자녀인 경우 자녀 연결선 좌표 실시간 업데이트
+  if (node.parentMarriageId) {
+    const childLine = el.linesGroup.querySelector(`line[data-child-node-id="${node.id}"][data-line-type="child-vertical"]`);
+    if (childLine) {
+      childLine.setAttribute('x1', node.x);
+      childLine.setAttribute('x2', node.x);
+      childLine.setAttribute('y2', node.y - 20);
+    }
+    const horLine = el.linesGroup.querySelector(`line[data-child-node-id="${node.id}"][data-line-type="child-horizontal"]`);
+    if (horLine) {
+      horLine.setAttribute('x2', node.x);
+    }
+  }
+  
+  // 4. 부모인 경우 배우자 연결선 및 자녀 수직/수평 지지선 실시간 업데이트
+  state.marriages.forEach(m => {
+    if (m.partner1Id === node.id || m.partner2Id === node.id) {
+      const p1 = findNode(m.partner1Id);
+      const p2 = findNode(m.partner2Id);
+      if (p1 && p2) {
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+        const anchorY = midY + 80;
+        
+        // 부부 가로 연결선
+        const coupleLine = el.linesGroup.querySelector(`line[data-family-marriage-id="${m.id}"][data-line-type="couple"]`);
+        if (coupleLine) {
+          coupleLine.setAttribute('x1', p1.x);
+          coupleLine.setAttribute('y1', p1.y);
+          coupleLine.setAttribute('x2', p2.x);
+          coupleLine.setAttribute('y2', p2.y);
+        }
+        
+        // 부부 결혼 노드(중앙 원)
+        const marriageEl = el.linesGroup.querySelector(`.marriage-node[data-marriage-id="${m.id}"]`);
+        if (marriageEl) {
+          marriageEl.setAttribute('transform', `translate(${midX}, ${midY})`);
+        }
+        
+        // 부부 중간 -> 수직 낙하선
+        const dropLine = el.linesGroup.querySelector(`line[data-family-marriage-id="${m.id}"][data-line-type="drop"]`);
+        if (dropLine) {
+          dropLine.setAttribute('x1', midX);
+          dropLine.setAttribute('y1', midY);
+          dropLine.setAttribute('x2', midX);
+          dropLine.setAttribute('y2', anchorY);
+        }
+        
+        // 자식들의 수평 가로선 및 수직 상단 시작선
+        const children = state.nodes.filter(n => n.parentMarriageId === m.id);
+        children.forEach(c => {
+          const horLine = el.linesGroup.querySelector(`line[data-child-node-id="${c.id}"][data-line-type="child-horizontal"]`);
+          if (horLine) {
+            horLine.setAttribute('x1', midX);
+            horLine.setAttribute('y1', anchorY);
+            horLine.setAttribute('y2', anchorY);
+          }
+          const childLine = el.linesGroup.querySelector(`line[data-child-node-id="${c.id}"][data-line-type="child-vertical"]`);
+          if (childLine) {
+            childLine.setAttribute('y1', anchorY);
+          }
+        });
+      }
+    }
+  });
+  
+  // 5. 드래그 흡착 대상 플레이스홀더(?) 하이라이트 실시간 처리
+  state.nodes.forEach(n => {
+    if (n.isPlaceholder) {
+      const phEl = el.nodesGroup.querySelector(`[data-node-id="${n.id}"]`);
+      if (phEl) {
+        if (state.activePlaceholderTargetId === n.id) {
+          phEl.classList.add('active-target');
+        } else {
+          phEl.classList.remove('active-target');
+        }
+      }
+    }
   });
 }
 
