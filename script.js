@@ -1330,6 +1330,7 @@ function onPointerUp(e) {
   
   if (state.draggedFamilyNodes && state.marriageDragStarted) {
     // 부부 결선 드래그 종료 시: 전체 가족 노드들을 40px 그리드에 맞춰 스냅 이동
+    // (상대적인 대칭 배열 간격을 유지하기 위해 각 노드를 개별 반올림하지 않고, 기준 노드의 스냅 변위 dx, dy를 동일하게 더해줍니다)
     if (state.draggedFamilyNodes.length > 0) {
       const firstNode = state.draggedFamilyNodes[0];
       const snappedX = Math.round(firstNode.x / 40) * 40;
@@ -1338,8 +1339,8 @@ function onPointerUp(e) {
       const dy = snappedY - firstNode.y;
       
       state.draggedFamilyNodes.forEach(n => {
-        n.x = Math.round((n.x + dx) / 40) * 40;
-        n.y = Math.round((n.y + dy) / 40) * 40;
+        n.x = n.x + dx;
+        n.y = n.y + dy;
       });
     }
   }
@@ -1619,6 +1620,7 @@ function onTouchEnd(e) {
     
     if (state.draggedFamilyNodes && state.marriageDragStarted) {
       // 부부 결선 드래그 종료 시: 전체 가족 노드들을 40px 그리드에 맞춰 스냅 이동
+      // (상대적인 대칭 배열 간격을 유지하기 위해 각 노드를 개별 반올림하지 않고, 기준 노드의 스냅 변위 dx, dy를 동일하게 더해줍니다)
       if (state.draggedFamilyNodes.length > 0) {
         const firstNode = state.draggedFamilyNodes[0];
         const snappedX = Math.round(firstNode.x / 40) * 40;
@@ -1627,8 +1629,8 @@ function onTouchEnd(e) {
         const dy = snappedY - firstNode.y;
         
         state.draggedFamilyNodes.forEach(n => {
-          n.x = Math.round((n.x + dx) / 40) * 40;
-          n.y = Math.round((n.y + dy) / 40) * 40;
+          n.x = n.x + dx;
+          n.y = n.y + dy;
         });
       }
     }
