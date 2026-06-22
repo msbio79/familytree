@@ -1551,7 +1551,6 @@ function onTouchEnd(e) {
   if (target && target.tagName && (target.tagName.toLowerCase() === 'select' || target.tagName.toLowerCase() === 'option' || target.closest('foreignObject'))) {
     return;
   }
-  e.preventDefault();
   
   if (state.mode === 'draw') {
     state.currentPath = null;
