@@ -285,10 +285,10 @@ function setupEventListeners() {
           el.notationRow.style.display = 'flex';
         }
       } else if (state.settings.chromosome === 'mixed') {
-        if (state.settings.traitCount === 2) {
-          el.linkageRow.style.display = 'flex'; // 사용자의 요청에 따라 복합 유전에서도 연관 옵션 표시
-        } else {
-          el.linkageRow.style.display = 'none';
+        el.linkageRow.style.display = 'none'; // 복합 유전은 상염색체+성염색체이므로 연관 불가 (무조건 독립)
+        if (state.settings.linkage !== 'independent') {
+          state.settings.linkage = 'independent';
+          el.linkageSelect.value = 'independent';
         }
         el.notationRow.style.display = 'none'; // 무조건 윗첨자 사용
         if (state.settings.notation === 'prime') {
@@ -2450,6 +2450,9 @@ function showToast(msg) {
 
 // --- 14. SVG 렌더링 엔진 (Drawing) ---
 function render() {
+  // SVG 포인터 이벤트 잠금 해제 (포커스된 select 소멸 시 락 상태 유지 방지)
+  el.svg.style.pointerEvents = 'auto';
+  
   // 1. 초기 캔버스 비우기
   el.linesGroup.innerHTML = '';
   el.nodesGroup.innerHTML = '';
